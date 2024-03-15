@@ -34,10 +34,10 @@ logging.basicConfig(filename='app.log', level=logging.DEBUG,
                     format='%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s')
 
 # Load geospatial data
-gdf = gpd.read_file("C:/Users/riman/OneDrive/Desktop/magisterr/python/test/geospatial/latvian_map_data/Territorial_units_LV_1.2m_(2024.01.01.).shp", encoding='utf-8')
-gdf_2 = gpd.read_file("C:/Users/riman/OneDrive/Desktop/magisterr/python/test/geospatial/latvian_map_data/Administrativas_teritorijas_2021.shp", encoding='utf-8')
-df = pd.read_excel("C:/Users/riman/OneDrive/Desktop/magisterr/python/test/geospatial/raditaji.xlsx")
-xls = pd.ExcelFile("C:/Users/riman/OneDrive/Desktop/magisterr/python/test/geospatial/raditaji.xlsx")
+gdf = gpd.read_file("C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/latvian_map_data/Territorial_units_LV_1.2m_(2024.01.01.).shp", encoding='utf-8')
+gdf_2 = gpd.read_file("C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/latvian_map_data/Administrativas_teritorijas_2021.shp", encoding='utf-8')
+df = pd.read_excel("C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/raditaji.xlsx")
+xls = pd.ExcelFile("C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/raditaji.xlsx")
 
 reģions_index = df.columns.get_loc("Reģions")
 new_columns_order = df.columns[reģions_index:].tolist()
@@ -46,7 +46,7 @@ df = df[new_columns_order]
 
 # Reading all sheets from the Excel file
 
-all_sheets_df = pd.read_excel("C:/Users/riman/OneDrive/Desktop/magisterr/python/test/geospatial/raditaji.xlsx", sheet_name=None)
+all_sheets_df = pd.read_excel("C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/raditaji.xlsx", sheet_name=None)
 sheets_df= {}
 for sheet_name in xls.sheet_names:
     # Here, dtype=str ensures all columns are treated as strings
