@@ -1,6 +1,5 @@
 import pandas as pd
 import geopandas as gpd
-
 import folium
 from flask import Flask, render_template_string ,request, render_template,jsonify
 import geoplot
@@ -44,9 +43,8 @@ new_columns_order = df.columns[reģions_index:].tolist()
 new_columns_order += df.columns[:reģions_index].tolist()
 df = df[new_columns_order]
 
-# Reading all sheets from the Excel file
 
-all_sheets_df = pd.read_excel("C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/raditaji.xlsx", sheet_name=None)
+
 sheets_df= {}
 for sheet_name in xls.sheet_names:
     # Here, dtype=str ensures all columns are treated as strings
@@ -57,9 +55,7 @@ for sheet_name in xls.sheet_names:
  # Check the current CRS
 gdf = gdf.to_crs(epsg=4326)
 gdf_2 = gdf_2.to_crs(epsg=4326)  # Convert to WGS84 if necessary
-# Merge the two dataframes
-# Initialize a dictionary to store the merged data for each sheet
-# Assume sheets_df is your dictionary of DataFrames from Excel sheets
+
 merged_data_dict = {}
 
 for sheet_name, df in sheets_df.items():
@@ -70,47 +66,29 @@ for sheet_name, df in sheets_df.items():
         merged_df = gdf_2.merge(df, left_on='NOSAUKUMS', right_on='Pašvaldība', how='left')
 
     # Check and merge unmatched rows using LABEL against Pašvaldība
-    unmatched = merged_df[merged_df['Pašvaldība'].isnull()]
+        
+    unmatched = merged_df[merged_df['Pašvaldība'].isna()]
+    
+    print(unmatched[['Pašvaldība']].drop_duplicates())
+    
+    print(gdf_2['LABEL'].dtype, unmatched['Pašvaldība'].dtype)
     if not unmatched.empty:
         matched_using_label = gdf_2.merge(unmatched, left_on='LABEL', right_on='Pašvaldība', how='inner')
         merged_df.update(matched_using_label)
 
+        
+
     # Convert the merged DataFrame to a GeoDataFrame
     merged_data_dict[sheet_name] = gpd.GeoDataFrame(merged_df)
-
+    
+    
     numeric_columns = df.select_dtypes(include='number').columns.tolist()
-
     for column in numeric_columns:
         if not pd.api.types.is_numeric_dtype(merged_data_dict[sheet_name][column]):
             merged_data_dict[sheet_name][column] = pd.to_numeric(merged_data_dict[sheet_name][column], errors='coerce')
-        
-
-           
-
-
-
-
-
-#merged_data = gpd.GeoDataFrame(gdf.merge(df, left_on='L1_name', right_on='Teritoriālais iedalījums', how='left'))
-merged_data3 = gpd.GeoDataFrame(gdf_2.merge(df, left_on='NOSAUKUMS', right_on='Pašvaldība', how='left'))
-year = 2022  # The year you're interested in
-year_str = str(year)  # Convert the year to a string
-
-
-
-
-# Define a function for when a feature is highlighted (clicked or hovered over)
-highlight_function = lambda x: {'fillColor': '#646464',  # Darker color
-                                'color': '#646464',  # Darker outline color
-                                'weight': 3,  # Make outline thicker
-                                'fillOpacity': 0.1}  # Optional: Change fill opacity
-
-
-
 
 
 heatmap_data = []
-
 
 @app.route('/sheets')
 def get_sheets():
@@ -148,8 +126,7 @@ def get_sheet_data(sheet_name):
 
 @app.route('/')
 def index():
-    logging.debug("Index route is called.")
-  
+    logging.debug("Index route is called.")  
 
     return render_template("map.html" )
 
