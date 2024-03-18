@@ -420,12 +420,14 @@ document.getElementById('sheet-select4').addEventListener('change', function() {
     
 });
 function updateMaps(){
-    
+    // function to update all maps after year selection, iterates over mymapArray for data and selected indicators for each map
+    var selectedYear = document.getElementById('year-select').value;
+    var selectedSheet = document.getElementById(`sheet-select1`).value;
     var url
     var j=1;
     for (let i = 0; i < mymapArray.length+1;i++) {
-        var selectedYear = document.getElementById('year-select').value;
-        var selectedSheet = document.getElementById(`sheet-select1`).value;
+        
+        
         const mapid= mymapArray[i];
         
         
@@ -440,7 +442,7 @@ function updateMaps(){
         }
         url = `/sheet_data/${encodeURIComponent(selectedSheet)}?year=${encodeURIComponent(selectedYear)}`;
         j++;
-        fetchAndCreateChoropleth(url,mapid);
+        fetchAndCreateChoropleth(url,mapid); // utilizes previous functions to update maps
         
         
         
