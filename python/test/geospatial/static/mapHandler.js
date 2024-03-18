@@ -20,7 +20,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 }).addTo(mymap4);
 
-var mymapArray= [];
+var mymapArray = [];
 mymapArray.push(mymap1);
 mymapArray.push(mymap2);
 mymapArray.push(mymap3);
@@ -51,7 +51,7 @@ fetch('/sheets').then(response => response.json()).then(data => {
         select2.add(option2);
         select3.add(option3);
         select4.add(option4);
-        
+
     });
 });
 
@@ -75,7 +75,7 @@ var choroplethLayer;
 var heatmapLayer;
 var lastClickedLayer = null;
 var currentGeoJSONLayer = null;
-const availableYears = ['2016','2017','2018','2019','2020', '2021', '2022','2023'];
+const availableYears = ['2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023'];
 
 
 
@@ -92,24 +92,24 @@ function updateGeoJSONLayer(sheetName) {
     // Fetch the new GeoJSON data and create a layer
     currentGeoJSONLayer = new L.GeoJSON.AJAX(geojsonUrl, {
         style: defaultStyle,
-        onEachFeature: function(feature, layer) {
-            layer.on('click', function(e) {
+        onEachFeature: function (feature, layer) {
+            layer.on('click', function (e) {
                 if (lastClickedLayer) lastClickedLayer.setStyle(defaultStyle);
                 e.target.setStyle(highlightStyle);
                 lastClickedLayer = e.target;
                 var props = e.target.feature.properties;
                 // Assuming you have a function to update the dataTable based on the clicked feature
                 updateDataTable(props);
-               
+
             });
             if (feature.properties && feature.properties['Pašvaldība']) {
                 layer.bindTooltip(feature.properties['Pašvaldība'], {
-                    permanent: false, 
+                    permanent: false,
                     direction: 'auto'
                 });
 
             }
-            if(feature.properties && feature.properties['Teritoriālais iedalījums']){
+            if (feature.properties && feature.properties['Teritoriālais iedalījums']) {
                 layer.bindTooltip(feature.properties['Teritoriālais iedalījums'], {
                     permanent: false, // Set to true if you want the labels to always be visible
                     direction: 'auto'
@@ -122,89 +122,94 @@ function updateGeoJSONLayer(sheetName) {
 
 
 
-function fetchAndCreateChoropleth(url,mapid) {
-   
+function fetchAndCreateChoropleth(url, mapid) {
+
     fetch(url)
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
-        return response.json();
-    })
-    .then(geojsonData => {
-        // Assuming you have a global variable for the choropleth layer that can be reused
-        if (mapid.choroplethLayer && mapid.choroplethLayer.length > 0) {
-            // Loop through the array of layers and remove each one
-            mapid.choroplethLayer.forEach(function(layer) {
-              mapid.removeLayer(layer);
-            });
-          
-            // After removing all layers, clear the array
-           
-        }
-        
-
-        let minValue = Infinity;
-        let maxValue = -Infinity;
-        function onEachFeature(feature, layer) {
-            // Check if the feature has the property you want to show in the tooltip
-            if (feature.properties && feature.properties['Pašvaldība']) {
-                layer.bindTooltip(feature.properties['Pašvaldība'], {
-                    permanent: false, // Set to true if you want the labels to always be visible
-                    direction: 'auto'
-                });
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
             }
-            if (feature.properties && feature.properties['Teritoriālais iedalījums']) {
-                layer.bindTooltip(feature.properties['Teritoriālais iedalījums'], {
-                    permanent: false, // Set to true if you want the labels to always be visible
-                    direction: 'auto'
+            return response.json();
+        })
+        .then(geojsonData => {
+            // Assuming you have a global variable for the choropleth layer that can be reused
+            if (mapid.choroplethLayer && mapid.choroplethLayer.length > 0) {
+                // Loop through the array of layers and remove each one
+                mapid.choroplethLayer.forEach(function (layer) {
+                    mapid.removeLayer(layer);
                 });
+
+                // After removing all layers, clear the array
+
             }
+            let minValue = Infinity;
+            let maxValue = -Infinity;
 
 
-            
 
-        }
-       
-       
 
-        // Create a choropleth layer using the fetched GeoJSON data
-        mapid.choroplethLayer = L.geoJson(geojsonData, {
-            style: function(feature) {
-               
-                geojsonData.features.forEach(feature => {
-                    const value = parseFloat(feature.properties[document.getElementById('year-select').value]);
-                    if (!isNaN(value)) {
-                        minValue = Math.min(minValue, value);
-                        maxValue = Math.max(maxValue, value);
+
+
+            // Create a choropleth layer using the fetched GeoJSON data
+            mapid.choroplethLayer = L.geoJson(geojsonData, {
+                style: function (feature) {
+
+                    geojsonData.features.forEach(feature => {
+                        const value = parseFloat(feature.properties[document.getElementById('year-select').value]);
+                        if (!isNaN(value)) {
+                            minValue = Math.min(minValue, value);
+                            maxValue = Math.max(maxValue, value);
+                        }
+
+
+
+                    });
+
+
+                    return {
+                        fillColor: getColor(feature.properties[document.getElementById('year-select').value], minValue, maxValue),
+                        weight: 2,
+                        opacity: 0.2,
+                        label: `heatmap for ${selectedSheet}`,
+                        color: 'white',
+                        dashArray: '3',
+                        fillOpacity: 0.7
+                    };
+
+                },
+                onEachFeature: function (feature, layer) {
+                    layer.on('click', function (e) {
+                        if (lastClickedLayer) lastClickedLayer.setStyle(defaultHighlightstyle);
+                        e.target.setStyle(defaultHighlightstyle);
+                        lastClickedLayer = e.target;
+                        var props = e.target.feature.properties;
+                        // Assuming you have a function to update the dataTable based on the clicked feature
+                        updateDataTable(props);
+
+                    });
+                    if (feature.properties && feature.properties['Pašvaldība']) {
+                        layer.bindTooltip(feature.properties['Pašvaldība'], {
+                            permanent: false,
+                            direction: 'auto'
+                        });
+
                     }
-                   
-
-                   
-                });
-
-             
-                return {
-                    fillColor:  getColor(feature.properties[document.getElementById('year-select').value], minValue, maxValue),
-                    weight: 2,
-                    opacity: 0.2,
-                    label:  `heatmap for ${selectedSheet}`,
-                    color: 'white',
-                    dashArray: '3',
-                    fillOpacity: 0.7
-                };
-                
-            },
-            onEachFeature: onEachFeature
+                    if (feature.properties && feature.properties['Teritoriālais iedalījums']) {
+                        layer.bindTooltip(feature.properties['Teritoriālais iedalījums'], {
+                            permanent: false, // Set to true if you want the labels to always be visible
+                            direction: 'auto'
+                        });
+                    }
+                }
 
 
-        }).addTo(mapid);
-        
+            }).addTo(mapid);
 
-        // Function to determine the color based on a property value
-      
-    })
-    .catch(error => console.error('Error fetching sheet data:', error));
+
+            // Function to determine the color based on a property value
+
+        })
+        .catch(error => console.error('Error fetching sheet data:', error));
 }
 
 
@@ -212,54 +217,44 @@ function fetchAndCreateChoropleth(url,mapid) {
 
 
 function populateYearSelector(years) {
-  const yearSelect = document.getElementById('year-select');
-  years.forEach(year => {
-    const option = document.createElement('option');
-    option.value = year;
-    option.innerText = year;
-    yearSelect.appendChild(option);
-  });
+    const yearSelect = document.getElementById('year-select');
+    years.forEach(year => {
+        const option = document.createElement('option');
+        option.value = year;
+        option.innerText = year;
+        yearSelect.appendChild(option);
+    });
 }
-
-
-
-
-
-
-function fetchAndDisplayDataForYear(sheetName, selectedYear , mapid) {
+function fetchAndDisplayDataForYear(sheetName, selectedYear, mapid) {
     const url = `/sheet_data/${encodeURIComponent(sheetName)}?year=${encodeURIComponent(selectedYear)}`;
     fetch(url)
-      .then(response => response.json())
-      .then(data => {
-        // Assuming 'data' includes GeoJSON data along with minValue and maxValue for the selected year
-        fetchAndCreateChoropleth(url); 
-      })
-      .catch(error => console.error('Error fetching data for year:', error));
-  }
-  
-  // Call this function whenever the year or sheet changes
-  const yearSelect = document.getElementById('year-select');
-  const sheetSelect = document.getElementById('sheet-select1'); 
-  yearSelect.addEventListener('change', () => {
+        .then(response => response.json())
+        .then(data => {
+            // Assuming 'data' includes GeoJSON data along with minValue and maxValue for the selected year
+            fetchAndCreateChoropleth(url);
+        })
+        .catch(error => console.error('Error fetching data for year:', error));
+}
+
+// Call this function whenever the year or sheet changes
+const yearSelect = document.getElementById('year-select');
+const sheetSelect = document.getElementById('sheet-select1');
+yearSelect.addEventListener('change', () => {
     const selectedYear = yearSelect.value;
     const selectedSheet = sheetSelect.value;
-    fetchAndDisplayDataForYear(selectedSheet, selectedYear,mapid);
-  });
-  
-  // Initially load map with default values
-  document.addEventListener('DOMContentLoaded', () => {
+    fetchAndDisplayDataForYear(selectedSheet, selectedYear, mapid);
+});
+
+// Initially load map with default values
+document.addEventListener('DOMContentLoaded', () => {
     const initialYear = availableYears[0]; // Default to first available year
     const initialSheet = sheetSelect.value; // Default to first sheet if you have a default selection
     yearSelect.value = initialYear; // Set default year in selector
     // Call this function when your page loads or when you receive the available years from the backend
     populateYearSelector(availableYears);
-    fetchAndDisplayDataForYear(initialSheet, initialYear,mapid);
-    
+    fetchAndDisplayDataForYear(initialSheet, initialYear, mapid);
+
 });
-
-
-
-
 function getColor(value, minValue, maxValue) {
     // Ensure the value is a number.
     const numValue = parseFloat(value);
@@ -268,15 +263,7 @@ function getColor(value, minValue, maxValue) {
     // Use the scale to get the color for the current value.
     return scale(numValue).hex();
 }
-
-
-
 var selectedSheet;
-
-
-
-
-
 function updateDataTable(props) {
     // Define the order of the text fields
     const textFieldsOrder = ['Reģions', 'Pašvaldība', 'ATVK', 'Teritoriālais iedalījums'];
@@ -315,7 +302,7 @@ function displayData(data) {
 
     // Clear existing table content
     var dataTable = document.getElementById('region-data');
-    
+
 
     // Assuming data is an array of objects where each object is a row of data
     const headers = data.reduce((acc, curr) => {
@@ -362,11 +349,18 @@ var defaultChoroplethStyle = {
     dashArray: '3',
     fillOpacity: 0.7
 };
+var defaultHighlightstyle = {
+    weight: 2,
+    opacity: 1,
+    color: 'white',
+    dashArray: '3',
+    fillOpacity: 0.7
+};
 
 
 // Function to update map layers based on selected sheets
 function updateMapWithSelectedSheets() {
-    ['sheet-select', 'sheet-select2', 'sheet-select3'].forEach(selectId => {
+    ['sheet-select1', 'sheet-select2', 'sheet-select3', 'sheet-select4'].forEach(selectId => {
         var sheetName = document.getElementById(selectId).value;
         fetchAndCreateChoroplethLayerForSheet(sheetName);
     });
@@ -374,92 +368,132 @@ function updateMapWithSelectedSheets() {
 
 
 
-document.getElementById('sheet-select1').addEventListener('change', function() {
+document.getElementById('sheet-select1').addEventListener('change', function () {
     var selectedSheet = this.value;
-    const mapid= mymapArray[0];
+    const mapid = mymapArray[0];
     var selectedYear = document.getElementById('year-select').value;
     //fetchAndDisplayDataForHeatmap(selectedSheet,document.getElementById('year-select').value);
     var url = `/sheet_data/${encodeURIComponent(selectedSheet)}?year=${encodeURIComponent(selectedYear)}`;
-    fetchAndCreateChoropleth(url,mapid);
-    
-  
-    
+    fetchAndCreateChoropleth(url, mapid);
+
+
+
 });
-document.getElementById('sheet-select2').addEventListener('change', function() {
+document.getElementById('sheet-select2').addEventListener('change', function () {
     var selectedSheet = this.value;
     var selectedYear = document.getElementById('year-select').value;
-    const mapid= mymapArray[1];
-    
+    const mapid = mymapArray[1];
+
     //fetchAndDisplayDataForHeatmap(selectedSheet,document.getElementById('year-select').value);
     var url = `/sheet_data/${encodeURIComponent(selectedSheet)}?year=${encodeURIComponent(selectedYear)}`;
-    fetchAndCreateChoropleth(url,mapid);
-    
-  
-    
+    fetchAndCreateChoropleth(url, mapid);
+
+
+
 });
-document.getElementById('sheet-select3').addEventListener('change', function() {
+document.getElementById('sheet-select3').addEventListener('change', function () {
     var selectedSheet = this.value;
     var selectedYear = document.getElementById('year-select').value;
-    const mapid= mymapArray[2];
+    const mapid = mymapArray[2];
     //fetchAndDisplayDataForHeatmap(selectedSheet,document.getElementById('year-select').value);
     var url = `/sheet_data/${encodeURIComponent(selectedSheet)}?year=${encodeURIComponent(selectedYear)}`;
-    fetchAndCreateChoropleth(url,mapid);
-    
-  
-    
+    fetchAndCreateChoropleth(url, mapid);
+
+
+
 });
-document.getElementById('sheet-select4').addEventListener('change', function() {
+document.getElementById('sheet-select4').addEventListener('change', function () {
     var selectedSheet = this.value;
     var selectedYear = document.getElementById('year-select').value;
-    const mapid= mymapArray[3];
+    const mapid = mymapArray[3];
     //fetchAndDisplayDataForHeatmap(selectedSheet,document.getElementById('year-select').value);
     var url = `/sheet_data/${encodeURIComponent(selectedSheet)}?year=${encodeURIComponent(selectedYear)}`;
-    fetchAndCreateChoropleth(url,mapid);
-    
-  
-    
+    fetchAndCreateChoropleth(url, mapid);
+
+
+
 });
-function updateMaps(){
+function updateMaps() {
     // function to update all maps after year selection, iterates over mymapArray for data and selected indicators for each map
     var selectedYear = document.getElementById('year-select').value;
     var selectedSheet = document.getElementById(`sheet-select1`).value;
     var url
-    var j=1;
-    for (let i = 0; i < mymapArray.length+1;i++) {
-        
-        
-        const mapid= mymapArray[i];
-        
-        
-        if (i!=0){
-            if(j==5){
-                selectedSheet = document.getElementById(`sheet-select${j-1}`).value;
-            }
-            selectedSheet = document.getElementById(`sheet-select${j}`).value;
-            
-                 
-            
-        }
+    var j = 1;
+    for (let i = 0; i < mymapArray.length; i++) {
+        const mapid = mymapArray[i];
+
+        selectedSheet = document.getElementById(`sheet-select${j}`).value;
         url = `/sheet_data/${encodeURIComponent(selectedSheet)}?year=${encodeURIComponent(selectedYear)}`;
-        j++;
-        fetchAndCreateChoropleth(url,mapid); // utilizes previous functions to update maps
-        
-        
-        
+
+        fetchAndCreateChoropleth(url, mapid);
+        j++; // utilizes previous functions to update maps
 
     }
 }
-
-
+///CLEAR MAP LAYERS
+function clearAllMapLayers() {
+    mymapArray.forEach(map => {
+        // Assuming you only want to keep the tile layer which is usually the first layer added
+        let tileLayer;
+        map.eachLayer(layer => {
+            if (layer instanceof L.TileLayer && !tileLayer) {
+                tileLayer = layer;
+            } else {
+                map.removeLayer(layer);
+            }
+        });
+        // Clear the reference to the choropleth layer if you keep one
+        if (map.choroplethLayer) {
+            map.choroplethLayer = null;
+        }
+    });
+}
 document.addEventListener('DOMContentLoaded', updateMapWithSelectedSheets);
 // Add event listeners for sheet selection changes
 document.getElementById('sheet-select1').addEventListener('change', updateMapWithSelectedSheets);
 document.getElementById('sheet-select2').addEventListener('change', updateMapWithSelectedSheets);
 document.getElementById('sheet-select3').addEventListener('change', updateMapWithSelectedSheets);
 document.getElementById('sheet-select4').addEventListener('change', updateMapWithSelectedSheets);
-document.getElementById('year-select').addEventListener('change', updateMaps);
+//document.getElementById('year-select').addEventListener('change', updateMaps);
+
+var updateButton = document.getElementById('update-button');
+if (updateButton) { // Check if the button exists
+    updateButton.addEventListener('click', function () {
+        updateMaps(); // Call the UpdateMaps function when the button is clicked
+    });
+}
+var clearLayersButton = document.getElementById('clear-layers-button');
+if (clearLayersButton) {
+    clearLayersButton.addEventListener('click', function () {
+        clearAllMapLayers(); // Call the function to clear layers when button is clicked
+    });
+}
 // Initialize map with default sheet selections
 
+
+var form = document.getElementById('file-upload-form');
+var fileInput = document.getElementById('file-input');
+
+form.onsubmit = async (e) => {
+    e.preventDefault(); // Prevent default form submission behavior
+    const formData = new FormData(form);
+
+    try {
+        const response = await fetch('http://localhost:5000/upload', {
+            method: 'POST', // Ensure method is POST
+            body: formData,
+        });
+
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+
+        // Handle success
+        console.log('Upload successful');
+    } catch (error) {
+        console.error('Upload failed:', error);
+    }
+};
 
 // Function to add or update a choropleth layer for a given sheet
 function fetchAndCreateChoroplethLayerForSheet(sheetName) {
@@ -470,7 +504,7 @@ function fetchAndCreateChoroplethLayerForSheet(sheetName) {
     fetch(url)
         .then(response => response.json())
         .then(geojsonData => {
-            
+
             if (choroplethLayers[sheetName]) {
                 mainMap.removeLayer(choroplethLayers[sheetName]);
             }
@@ -480,20 +514,21 @@ function fetchAndCreateChoroplethLayerForSheet(sheetName) {
                     minValue = Math.min(minValue, value);
                     maxValue = Math.max(maxValue, value);
                 }
-               
 
-               
+
+
             });
             var layer = L.geoJson(geojsonData, {
-                style: function(feature) {
-                    return {  
-                    fillColor:  getColor(feature.properties[document.getElementById('year-select').value], minValue, maxValue),
-                    weight: 2,
-                    opacity: 0.2,
-                    label:  `heatmap for ${selectedSheet}`,
-                    color: 'white',
-                    dashArray: '3',
-                    fillOpacity: 0.7 };
+                style: function (feature) {
+                    return {
+                        fillColor: getColor(feature.properties[document.getElementById('year-select').value], minValue, maxValue),
+                        weight: 2,
+                        opacity: 0.2,
+                        label: `heatmap for ${selectedSheet}`,
+                        color: 'white',
+                        dashArray: '3',
+                        fillOpacity: 0.7
+                    };
                 }
             });
             choroplethLayers[sheetName] = layer;

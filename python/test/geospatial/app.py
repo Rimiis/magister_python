@@ -1,7 +1,8 @@
 import pandas as pd
 import geopandas as gpd
 import folium
-from flask import Flask, render_template_string ,request, render_template,jsonify
+import os
+from flask import Flask, render_template_string ,request,redirect, render_template,jsonify, url_for , flash
 import geoplot
 import matplotlib.pyplot as plt
 import numpy as np
@@ -9,8 +10,24 @@ from sklearn.preprocessing import MinMaxScaler
 import logging
 from shapely.geometry import Point
 from folium.plugins import HeatMap
+from werkzeug.utils import secure_filename
 
+
+#initialize flask app
 app = Flask(__name__)
+
+UPLOAD_FOLDER = 'C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/'  # Specify the upload folder path
+ALLOWED_EXTENSIONS = {'xlsx'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB upload limit
+
+
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
 
 def assign_color(value, max_value):
     try:
@@ -69,9 +86,9 @@ for sheet_name, df in sheets_df.items():
         
     unmatched = merged_df[merged_df['Pašvaldība'].isna()]
     
-    print(unmatched[['Pašvaldība']].drop_duplicates())
+   
     
-    print(gdf_2['LABEL'].dtype, unmatched['Pašvaldība'].dtype)
+ 
     if not unmatched.empty:
         matched_using_label = gdf_2.merge(unmatched, left_on='LABEL', right_on='Pašvaldība', how='inner')
         merged_df.update(matched_using_label)
@@ -90,6 +107,31 @@ for sheet_name, df in sheets_df.items():
 
 heatmap_data = []
 
+#
+#Routes
+#
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    # Check if the post request has the file part
+    if 'file' not in request.files:
+        flash('No file part')
+        return redirect(request.url)  # Make sure to redirect or return a response
+    file = request.files['file']
+    # If the user does not select a file, the browser submits an
+    # empty file without a filename.
+    if file.filename == '':
+        flash('No selected file')
+        return redirect(request.url)  # Make sure to redirect or return a response
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        save_path = os.path.join(app.config['UPLOAD_FOLDER'], 'raditaji.xlsx')
+        file.save(save_path)
+        # Return a valid response, such as a success message, JSON response, or redirect
+        return jsonify({'message': 'File uploaded successfully'}), 200
+    # Provide a catch-all response in case none of the conditions above are met
+    return jsonify({'error': 'Invalid file or upload conditions not met'}), 400
+     
+    
 @app.route('/sheets')
 def get_sheets():
     return {'sheets': list(sheets_df.keys())}
