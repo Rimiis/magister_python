@@ -1,6 +1,7 @@
 import pandas as pd
 import geopandas as gpd
 import folium
+import glob
 import os
 from flask import Flask, render_template_string ,request,redirect, render_template,jsonify, url_for , flash
 import geoplot
@@ -15,8 +16,8 @@ from werkzeug.utils import secure_filename
 
 #initialize flask app
 app = Flask(__name__)
-
-UPLOAD_FOLDER = 'C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/'  # Specify the upload folder path
+global df
+UPLOAD_FOLDER = 'C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/upload/'  # Specify the upload folder path
 ALLOWED_EXTENSIONS = {'xlsx'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB upload limit
@@ -44,104 +45,250 @@ def assign_color(value, max_value):
     elif ratio > 0.25: return '#FEB24C'
     elif ratio > 0.125: return '#FED976'
     else: return '#FFEDA0'
-
+  # Declare global if these variables are to be updated
 
 logging.basicConfig(filename='app.log', level=logging.DEBUG,
                     format='%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s')
 
+
+uploads_dir = "C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/upload/"
+# List all files in the uploads directory
+files_in_uploads = os.listdir(uploads_dir)
+
+# Filter for any '.xlsx' file
+xlsx_files = [file for file in files_in_uploads if file.endswith('.xlsx')]
+
+# Process each '.xlsx' file
+for xlsx_file in xlsx_files:
+    # Construct the full path to the '.xlsx' file
+    xlsx_path = os.path.join(uploads_dir, xlsx_file)
+    
+    # Load the Excel file
+    df = pd.read_excel(xlsx_path)
+    xls = pd.ExcelFile(xlsx_path)
+
+
 # Load geospatial data
 gdf = gpd.read_file("C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/latvian_map_data/Territorial_units_LV_1.2m_(2024.01.01.).shp", encoding='utf-8')
 gdf_2 = gpd.read_file("C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/latvian_map_data/Administrativas_teritorijas_2021.shp", encoding='utf-8')
-df = pd.read_excel("C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/raditaji.xlsx")
-xls = pd.ExcelFile("C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/raditaji.xlsx")
-
+gdf = gdf.to_crs(epsg=4326)
+gdf_2 = gdf_2.to_crs(epsg=4326)  # Convert to WGS84 if necessary
 reģions_index = df.columns.get_loc("Reģions")
 new_columns_order = df.columns[reģions_index:].tolist()
 new_columns_order += df.columns[:reģions_index].tolist()
 df = df[new_columns_order]
-
-
-
-sheets_df= {}
-for sheet_name in xls.sheet_names:
-    # Here, dtype=str ensures all columns are treated as strings
-    sheets_df[sheet_name] = pd.read_excel(xls, sheet_name=sheet_name, header=0, dtype=str)
-    
-
-
- # Check the current CRS
-gdf = gdf.to_crs(epsg=4326)
-gdf_2 = gdf_2.to_crs(epsg=4326)  # Convert to WGS84 if necessary
-
+sheets_df = {}
 merged_data_dict = {}
 
-for sheet_name, df in sheets_df.items():
-    # Initial merge attempt
-    if 'Teritoriālais iedalījums' in df.columns:
-        merged_df = gdf.merge(df, left_on='L1_name', right_on='Teritoriālais iedalījums', how='left')
+
+
+
+
+# Path to the directory containing Excel files
+
+
+# List all Excel files in the directory
+
+
+# Iterate over each Excel file
+excel_files = glob.glob(os.path.join(uploads_dir, '*.xlsx'))
+for excel_file in excel_files:
+    # Load the Excel file
+    xls = pd.ExcelFile(excel_file)
+    
+    # Get the basename of the file (for use in the dictionary keys)
+    base_filename = os.path.basename(excel_file)
+    
+    # Iterate over each sheet in the Excel file
+    for sheet_name in xls.sheet_names:
+        # Read the sheet into a DataFrame, ensuring all data is read as strings
+        df = pd.read_excel(xls, sheet_name=sheet_name, header=0, dtype=str)
+        
+        # Create a unique key for the sheet using both the filename and sheet name
+        # This avoids overwriting data from sheets with the same name in different files
+        key = f'{sheet_name}'
+        
+        # Store the DataFrame in the dictionary
+        sheets_df[key] = df
+
+
+
+
+
+def calculate_quantiles(df, column):
+    """Calculate quantiles for a given column in a DataFrame."""
+    # Ensure the column is numeric
+    if pd.api.types.is_numeric_dtype(df[column]):
+        return df[column].quantile([0.2, 0.4, 0.6, 0.8]).values.tolist()
     else:
-        merged_df = gdf_2.merge(df, left_on='NOSAUKUMS', right_on='Pašvaldība', how='left')
+        # Return None or an appropriate value if the column is not numeric
+        return None
 
-    # Check and merge unmatched rows using LABEL against Pašvaldība
-        
-    unmatched = merged_df[merged_df['Pašvaldība'].isna()]
+for sheet_name, df in sheets_df.items():
+    # Convert columns to string to ensure proper merging
+    df = df.map(str)
     
-   
+    # Determine the appropriate GeoDataFrame and merge columns based on the sheet's contents
+    if 'Teritoriālais iedalījums' in df.columns:
+        merge_columns = ('L1_name', 'Teritoriālais iedalījums')
+        gdf_used = gdf
+    else:
+        merge_columns = ('NOSAUKUMS', 'Pašvaldība')
+        gdf_used = gdf_2
     
- 
-    if not unmatched.empty:
-        matched_using_label = gdf_2.merge(unmatched, left_on='LABEL', right_on='Pašvaldība', how='inner')
-        merged_df.update(matched_using_label)
-
-        
-
-    # Convert the merged DataFrame to a GeoDataFrame
-    merged_data_dict[sheet_name] = gpd.GeoDataFrame(merged_df)
+    # Perform the initial merge
+    merged_df = gdf_used.merge(df, left_on=merge_columns[0], right_on=merge_columns[1], how='left')
     
+    # Attempt to merge unmatched rows, if necessary
+    if 'LABEL' in df.columns and 'Pašvaldība' in merged_df.columns:
+        unmatched = merged_df[merged_df['Pašvaldība'].isna()]
+        if not unmatched.empty:
+            matched_using_label = gdf_2.merge(unmatched, left_on='LABEL', right_on='Pašvaldība', how='inner')
+            merged_df.update(matched_using_label)
     
-    numeric_columns = df.select_dtypes(include='number').columns.tolist()
-    for column in numeric_columns:
-        if not pd.api.types.is_numeric_dtype(merged_data_dict[sheet_name][column]):
-            merged_data_dict[sheet_name][column] = pd.to_numeric(merged_data_dict[sheet_name][column], errors='coerce')
-
-
+    # Ensure the result is a GeoDataFrame
+    merged_data_dict[sheet_name] = gpd.GeoDataFrame(merged_df, geometry='geometry')
+    
+    # Calculate quantiles for numeric columns and store the results
+    quantiles_dict = {}
+    for column in merged_df.select_dtypes(include='number').columns:
+        quantiles_dict[column] = calculate_quantiles(merged_df, column)
+    
+    # Assuming you want to store the quantiles in the merged_data_dict as well
+    merged_data_dict[sheet_name]['quantiles'] = quantiles_dict
 heatmap_data = []
+
+
+
+
+
+quantiles_info = {}  # Global variable to store quantiles
+
+def calculate_quantiles_for_all_columns(df):
+    quantiles = {}
+    for column in df.select_dtypes(include=[np.number]).columns:
+        quantiles[column] = df[column].quantile([0.2, 0.4, 0.6, 0.8]).tolist()
+    return quantiles
+
+def update_application_state(new_file_path):
+    global sheets_df, quantiles_info  # Access global variables
+    try:
+            # Path to the directory containing Excel files
+
+
+        # List all Excel files in the directory
+        excel_files = glob.glob(os.path.join(uploads_dir, '*.xlsx'))
+
+        # Iterate over each Excel file
+        for excel_file in excel_files:
+            # Load the Excel file
+            xls = pd.ExcelFile(excel_file)
+            
+            # Get the basename of the file (for use in the dictionary keys)
+            base_filename = os.path.basename(excel_file)
+            
+            # Iterate over each sheet in the Excel file
+            for sheet_name in xls.sheet_names:
+                # Read the sheet into a DataFrame, ensuring all data is read as strings
+                df = pd.read_excel(xls, sheet_name=sheet_name, header=0, dtype=str)
+                
+                # Create a unique key for the sheet using both the filename and sheet name
+                # This avoids overwriting data from sheets with the same name in different files
+                key = f'{sheet_name}'
+                
+                # Store the DataFrame in the dictionary
+                sheets_df[key] = df
+        
+        for sheet_name, df in sheets_df.items():
+            # Convert columns to string to ensure proper merging
+            df = df.map(str)
+            
+            # Determine the appropriate GeoDataFrame and merge columns based on the sheet's contents
+            if 'Teritoriālais iedalījums' in df.columns:
+                merge_columns = ('L1_name', 'Teritoriālais iedalījums')
+                gdf_used = gdf
+            else:
+                merge_columns = ('NOSAUKUMS', 'Pašvaldība')
+                gdf_used = gdf_2
+            
+            # Perform the initial merge
+            merged_df = gdf_used.merge(df, left_on=merge_columns[0], right_on=merge_columns[1], how='left')
+            
+            # Attempt to merge unmatched rows, if necessary
+            if 'LABEL' in df.columns and 'Pašvaldība' in merged_df.columns:
+                unmatched = merged_df[merged_df['Pašvaldība'].isna()]
+                if not unmatched.empty:
+                    matched_using_label = gdf_2.merge(unmatched, left_on='LABEL', right_on='Pašvaldība', how='inner')
+                    merged_df.update(matched_using_label)
+            
+            # Ensure the result is a GeoDataFrame
+            merged_data_dict[sheet_name] = gpd.GeoDataFrame(merged_df, geometry='geometry')
+            
+            # Calculate quantiles for numeric columns and store the results
+            quantiles_dict = {}
+            for column in merged_df.select_dtypes(include='number').columns:
+                quantiles_dict[column] = calculate_quantiles(merged_df, column)
+            
+            # Assuming you want to store the quantiles in the merged_data_dict as well
+            merged_data_dict[sheet_name]['quantiles'] = quantiles_dict        
+    except Exception as e:
+        logging.error(f"Failed to update application state: {str(e)}")
 
 #
 #Routes
 #
+
+@app.route('/list-xlsx-files')
+def list_xlsx_files():
+    uploads_dir = 'C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/upload/'  # Update this path
+    files = [f for f in os.listdir(uploads_dir) if f.endswith('.xlsx')]
+    return jsonify(files)
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    # Check if the post request has the file part
     if 'file' not in request.files:
         flash('No file part')
-        return redirect(request.url)  # Make sure to redirect or return a response
+        return redirect(request.url)
     file = request.files['file']
-    # If the user does not select a file, the browser submits an
-    # empty file without a filename.
-    if file.filename == '':
-        flash('No selected file')
-        return redirect(request.url)  # Make sure to redirect or return a response
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        save_path = os.path.join(app.config['UPLOAD_FOLDER'], 'raditaji.xlsx')
-        file.save(save_path)
-        # Return a valid response, such as a success message, JSON response, or redirect
-        return jsonify({'message': 'File uploaded successfully'}), 200
-    # Provide a catch-all response in case none of the conditions above are met
-    return jsonify({'error': 'Invalid file or upload conditions not met'}), 400
-     
+    if file.filename == '' or not allowed_file(file.filename):
+        flash('No selected file or invalid file type')
+        return redirect(request.url)
     
-@app.route('/sheets')
-def get_sheets():
-    return {'sheets': list(sheets_df.keys())}
+    filename = secure_filename(file.filename)
+    save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(save_path)
+
+    # Call the function to update application state
+    update_application_state(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+    return jsonify({'message': 'File uploaded successfully', 'filename': filename}), 200
+    #jsonify({'message': 'File uploaded and application state updated successfully'}), 200
+  
+
+@app.route('/sheets/<filename>')
+def get_sheets(filename):
+    # Make sure to validate the filename to prevent path traversal attacks
+    safe_filename = secure_filename(filename)
+    file_path = os.path.join(UPLOAD_FOLDER, safe_filename)
+    try:
+        xls = pd.ExcelFile(file_path)
+        sheet_names = xls.sheet_names
+        return jsonify({'sheets': sheet_names})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+
 @app.route('/sheet_data/<path:sheet_name>')
 def get_sheet_data(sheet_name):
+    
+    print(f"Requested sheet name: {sheet_name}")  # Debug print
+    year = request.args.get('year')
+    print(f"Requested year: {year}")  # Debug print
     try:
-        year = request.args.get('year')  # Get the year from the query parameter
+        year = request.args.get('year')
+       # Get the year from the query parameter
         if sheet_name in merged_data_dict:
+            
             merged_geo_df = merged_data_dict[sheet_name]
-
+            
             if year and year in merged_geo_df.columns:
                 # Filter the GeoDataFrame for the selected year
                 # Here you could also calculate the min and max values for color scaling
