@@ -126,7 +126,7 @@ def calculate_quantiles(df, column):
 
 for sheet_name, df in sheets_df.items():
     # Convert columns to string to ensure proper merging
-    df = df.map(str)
+    df = df.astype(str)
     
     # Determine the appropriate GeoDataFrame and merge columns based on the sheet's contents
     if 'Teritoriālais iedalījums' in df.columns:
@@ -139,23 +139,32 @@ for sheet_name, df in sheets_df.items():
     # Perform the initial merge
     merged_df = gdf_used.merge(df, left_on=merge_columns[0], right_on=merge_columns[1], how='left')
     
-    # Attempt to merge unmatched rows, if necessary
-    if 'LABEL' in df.columns and 'Pašvaldība' in merged_df.columns:
-        unmatched = merged_df[merged_df['Pašvaldība'].isna()]
-        if not unmatched.empty:
-            matched_using_label = gdf_2.merge(unmatched, left_on='LABEL', right_on='Pašvaldība', how='inner')
-            merged_df.update(matched_using_label)
+    # If we are using 'NOSAUKUMS' and 'Pašvaldība' as merge columns,
+    # check for unmatched rows and perform a secondary merge with gdf_2 using 'LABEL'
+    if merge_columns == ('NOSAUKUMS', 'Pašvaldība'):
+        # Identify rows in df that didn't match
+        unmatched_df = df[~df[merge_columns[1]].isin(merged_df[merge_columns[1]])]
+        
+        if not unmatched_df.empty:
+            matched_using_label = gdf_2.merge(unmatched_df, left_on='LABEL', right_on=merge_columns[1], how='inner')
+            # Concatenate the matched rows using LABEL with the main merged DataFrame
+            merged_df = pd.concat([merged_df, matched_using_label], ignore_index=True)
     
     # Ensure the result is a GeoDataFrame
     merged_data_dict[sheet_name] = gpd.GeoDataFrame(merged_df, geometry='geometry')
-    
+
     # Calculate quantiles for numeric columns and store the results
     quantiles_dict = {}
     for column in merged_df.select_dtypes(include='number').columns:
         quantiles_dict[column] = calculate_quantiles(merged_df, column)
     
-    # Assuming you want to store the quantiles in the merged_data_dict as well
+    # Store the quantiles in the merged_data_dict as well
     merged_data_dict[sheet_name]['quantiles'] = quantiles_dict
+
+# Function to calculate quantiles, assuming it's defined
+def calculate_quantiles(merged_df, column):
+    return merged_df[column].quantile([0.25, 0.5, 0.75]).to_dict()
+
 heatmap_data = []
 
 
