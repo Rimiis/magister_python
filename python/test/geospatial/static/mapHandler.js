@@ -25,15 +25,6 @@ mymapArray.push(mymap2);
 mymapArray.push(mymap3);
 mymapArray.push(mymap4);
 mymapArray.push(mainMap);
-
-let currentLayer;
-var choroplethLayer;
-var heatmapLayer;
-var lastClickedLayer = null;
-var currentGeoJSONLayer = null;
-const availableYears = ['2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023'];
-const width = 960, height = 600;
-
 schemes = [
     {
       name: "RdBu", 
@@ -68,33 +59,80 @@ schemes = [
       ]
     }
   ]
+let currentLayer;
+var choroplethLayer;
+var heatmapLayer;
+var lastClickedLayer = null;
+var currentGeoJSONLayer = null;
+const availableYears = ['2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023'];
+const width = 960, height = 600;
+let sheetsData = {
+    'sheet1': null, // Placeholder for actual data
+    'sheet2': null, // Placeholder for actual data
+    // Add more sheets as needed
+};
 
 
-// Create an SVG element and append it to the 'd3-container' div
-const svg = d3.select('#d3-container').append('svg')
-    .attr('width', width)
-    .attr('height', height);
 
-// Optional: Set up a background or border for visual confirmation
-svg.append('rect')
-    .attr('width', '100%')
-    .attr('height', '100%')
-    .attr('fill','none') // No fill to see underlying map if desired
-    .attr('stroke', 'white');
 
-// Now your SVG is ready to draw the map on
-// You might want to define your map projection and path generator here if they won't change
+function addLegend(map, colors, values) {
+    const legend = L.control({ position: 'bottomright' });
+
+    legend.onAdd = function (map) {
+        const div = L.DomUtil.create('div', 'info legend');
+        const gradientColors = colors.join(", ");
+        const labels = values.map((value, index) => {
+            return `<span style="left: ${(index / (values.length - 1)) * 100}%; position: absolute;">${value.toFixed(2)}</span>`;
+        }).join("");
+
+        div.innerHTML = `
+            <div style="width: 200px; height: 20px; position: relative; background: linear-gradient(to right, ${gradientColors});"></div>
+            <div style="width: 200px; position: relative; height: 20px; margin-top: 5px;">
+                ${labels}
+            </div>
+        `;
+
+        return div;
+    };
+
+    // Remove existing legend if present
+    if (map.legend) {
+        map.removeControl(map.legend);
+    }
+
+    // Add the new legend to the map
+    legend.addTo(map);
+    map.legend = legend; // Store reference to the legend
+}
+function generateLegendColors(minValue, maxValue) {
+    const sampleValues = [];
+    const negativeSteps = 4; // Number of steps for negative values, adjust as needed
+    const positiveSteps = 4; // Number of steps for positive values, adjust as needed
+    const negativeStep = minValue / (negativeSteps - 1);
+    const positiveStep = maxValue / (positiveSteps - 1);
+
+    // Generate negative values (if minValue is negative)
+    for (let i = 0; i < negativeSteps && minValue < 0; i++) {
+        sampleValues.push(negativeStep * i);
+    }
+
+    // Generate positive values
+    for (let i = 0; i < positiveSteps; i++) {
+        sampleValues.push(positiveStep * i);
+    }
+
+    // Use the getColor function to map these sample values to colors
+    const sampleColors = sampleValues.map(value => getColor(value, minValue, maxValue));
+    
+    return { sampleValues, sampleColors };
+}
+
+
+
 const projection = d3.geoMercator()
-    .center([24.1052, 56.9496]) // Centered on Latvia (example)
-    .scale(7000) // Scale to fit your specific geography
-    .translate([width / 2, height / 2]); // Center the map in the SVG element
-
-const path = d3.geoPath().projection(projection);
-
-
-
-
-
+.center([24.1052, 56.9496]) // Center the map (example: center of Latvia)
+.scale(7000) // Scale for zooming (adjust according to your needs)
+.translate([width / 2, height / 2]); // Center the map in the SVG element
 
 
 
@@ -114,7 +152,8 @@ var highlightStyle = {
 //variables
 
 function fetchAndCreateChoropleth(url, mapid) {
-
+    // Adjusting addLegend function call to use generated sample values and colors
+    
     fetch(url)
         .then(response => {
             if (!response.ok) {
@@ -178,11 +217,12 @@ function fetchAndCreateChoropleth(url, mapid) {
                         });
                     }
                 }
-
+                
 
             }).addTo(mapid);
 
-
+            const { sampleValues, sampleColors } = generateLegendColors(minValue, maxValue);
+            addLegend(mapid, sampleColors, sampleValues);
             
 
         })
@@ -202,15 +242,8 @@ function populateYearSelector(years) {
     });
 }
 
-
-// Call this function whenever the year or sheet changes
 const yearSelect = document.getElementById('year-select');
 const sheetSelect = document.getElementById('sheet-select1');
-yearSelect.addEventListener('change', () => {
-    const selectedYear = yearSelect.value;
-    const selectedSheet = sheetSelect.value;
-    
-});
 
 function updateD3Map(sheetName, selectedYear) {
     const url = `/sheet_data/${encodeURIComponent(sheetName)}?year=${encodeURIComponent(selectedYear)}`;
@@ -222,16 +255,14 @@ function updateD3Map(sheetName, selectedYear) {
             const projection = d3.geoMercator().center([24.1052, 56.9496]).scale(7000).translate([svg.attr('width') / 2, svg.attr('height') / 2]);
             const path = d3.geoPath().projection(projection);
             const value = document.getElementById('year-select').value;
-            // Clear previous paths
+            
             svg.selectAll('path').remove();
-
-            // Draw new paths based on the fetched GeoJSON data
             svg.selectAll('path')
                 .data(geojsonData.features)
                 .enter().append('path')
                 .attr('d', path)
                 .attr('fill', function(d) {
-                    // Set fill color based on some property; adjust logic as necessary
+                    
                     
                     return getColor(d.properties[`${value}`], minValue, maxValue);
                 });
@@ -241,11 +272,26 @@ function updateD3Map(sheetName, selectedYear) {
 
 document.getElementById('xlsx-file-select').addEventListener('change', function() {
     const selectedFile = this.value;
-    console.log('Selected XLSX file:', selectedFile);
+    
     fetchSheetsForFile(selectedFile);
-    
-    
+
 });
+async function fetchAllSheetData() {
+    const sheetNames = Object.keys(sheetsData); // Assuming you know sheet names ahead of time or have fetched them already
+    try {
+      const fetchPromises = sheetNames.map(sheetName => fetch(`/sheet_data/${sheetName}`).then(response => response.json()));
+      const results = await Promise.all(fetchPromises);
+      results.forEach((data, index) => {
+        const sheetName = sheetNames[index];
+        sheetsData[sheetName] = data; // Populate the sheetsData object with fetched data
+      });
+      console.log('All sheet data loaded:', sheetsData);
+    } catch (error) {
+      console.error('Error fetching sheet data:', error);
+    }
+  }
+fetchAllSheetData();
+
 function fetchSheetsForFile(filename) {
     // Ensure filename is URL encoded to handle special characters
     fetch(`/sheets/${encodeURIComponent(filename)}`).then(response => response.json()).then(data => {
@@ -258,17 +304,13 @@ function fetchSheetsForFile(filename) {
             
             data.sheets.forEach(sheet => {
                 const option = new Option(sheet, sheet);
-                console.log(option)
+                
                 select.add(option);
             });
         });
     }).catch(error => console.error('Error fetching sheets:', error));
 }
 
-
-
-
-// Add an event listener to your file selector to fetch sheets for the selected file
 document.getElementById('xlsx-file-select').addEventListener('change', function() {
     const selectedFile = this.value;
     if(selectedFile) {
@@ -276,81 +318,63 @@ document.getElementById('xlsx-file-select').addEventListener('change', function(
     }
 });
 
+
 function updateBivariateChoroplethMap() {
     const sheetName1 = document.getElementById('sheet-select1').value;
     const sheetName2 = document.getElementById('sheet-select2').value;
     const selectedYear = document.getElementById('year-select').value;
 
-    // URLs to fetch data for each sheet
-    const url1 = `/sheet_data/${encodeURIComponent(sheetName1)}?year=${encodeURIComponent(selectedYear)}`;
-    const url2 = `/sheet_data/${encodeURIComponent(sheetName2)}?year=${encodeURIComponent(selectedYear)}`;
-
-    // Fetch data for both sheets concurrently
-    Promise.all([fetch(url1).then(res => res.json()), fetch(url2).then(res => res.json())])
+    Promise.all([
+        fetch(`/sheet_data/${encodeURIComponent(sheetName1)}?year=${encodeURIComponent(selectedYear)}`).then(res => res.json()),
+        fetch(`/sheet_data/${encodeURIComponent(sheetName2)}?year=${encodeURIComponent(selectedYear)}`).then(res => res.json())
+    ])
     .then(([data1, data2]) => {
-        // Assuming data1 and data2 have geojson structures and matching IDs
-        const geojsonData = data1; // Use the structure from data1 for the paths
+        const svg = d3.select('#d3-container').html("").append('svg')
+            .attr('width', width)
+            .attr('height', height);
 
-        // Get the combined bivariate color scale function
-        const bivariateColorScale = getBivariateColorScale();
-
-        // Assume we're directly modifying the SVG appended to 'd3-container'
-        const svg = d3.select('#d3-container svg');
-        svg.selectAll('path').remove(); // Clear previous paths
-
-        // Draw new paths based on the fetched GeoJSON data
+        // Assuming projection is defined elsewhere according to your geographic focus
+        const path = d3.geoPath().projection(projection);
+        const selectedScheme = schemes.find(scheme => scheme.name === "RdBu").colors;
         svg.selectAll('path')
-            .data(geojsonData.features)
+            .data(data1.features)
             .enter().append('path')
-            .attr('d', path)
+            .attr('d', path) // Draw each feature using the path generator
             .attr('fill', d => {
-                // Find the corresponding feature in data2 by ID
-                const matchingFeature = data2.features.find(f => f.properties.id === d.properties.id);
-                
-                // Assuming 'value' is the property name that contains the data to visualize
-                const value1 = d.properties.value;
-                const value2 = matchingFeature ? matchingFeature.properties.value : 0; // Use 0 or another default for missing matches
-                
-                // Use the bivariate color scale to get the fill color
-                return bivariateColorScale(value1, value2);
-            });
+                const value1 = d.properties[selectedYear] ? parseFloat(d.properties[selectedYear]) : 0;
+                const matchingFeature = data2.features.find(f => f.properties.NOSAUKUMS === d.properties.NOSAUKUMS);
+                const value2 = matchingFeature && matchingFeature.properties[selectedYear] ? parseFloat(matchingFeature.properties[selectedYear]) : 0;
+
+                // Use a function to determine the fill color based on value1 and value2
+                return getBivariateColor(value1, value2);
+            })
+            .attr('stroke', 'black') // Optional: adds a stroke around each polygon
+            .attr('stroke-width', 1);
     })
     .catch(error => console.error('Error updating D3 map:', error));
 }
 
-function getBivariateColorScale() {
-    // This function should implement the logic to return a color based on two values
-    // For demonstration, we will use simple linear scales and d3.interpolateLab for color blending
-    const scaleValue1 = d3.scaleLinear().domain([0, 100]).range([0, 1]); // Example scale for value1
-    const scaleValue2 = d3.scaleLinear().domain([0, 100]).range([0, 1]); // Example scale for value2
+// Dummy implementation - replace with your actual logic
+function getBivariateColor(value1, value2) {
+    // Implement logic to determine color based on the two values
+    // Placeholder: simple linear interpolation example
+    const colorScale = d3.scaleLinear().domain([0, 500]).range(["blue", "red"]);
+    return colorScale((value1 + value2) / 2);
+}
+
+
+function getBivariateColorScale(minValue1, maxValue1, minValue2, maxValue2) {
+    const scaleValue1 = d3.scaleLinear().domain([minValue1, maxValue1]).range([0, 1]);
+    const scaleValue2 = d3.scaleLinear().domain([minValue2, maxValue2]).range([0, 1]);
 
     return (value1, value2) => {
-        // Normalize values
         const normalizedValue1 = scaleValue1(value1);
         const normalizedValue2 = scaleValue2(value2);
-
-        // Interpolate between two base colors depending on the values
-        // Here, as an example, blending from blue to red for value1 and green for value2
         const color1 = d3.interpolateLab("blue", "red")(normalizedValue1);
         const color2 = d3.interpolateLab("white", "green")(normalizedValue2);
-
-        // Blend the two colors equally
-        return d3.interpolateLab(color1, color2)(0.5);
+        return d3.interpolateLab(color1, color2)(0.5); // Blends the two colors
     };
 }
-
-function blendColors(color1, color2) {
-    console.log('Blending colors:', color1, color2); // Log colors to debug
-    
-    return chroma.mix(color1, color2, 0.5, 'rgb').hex();
-}
-
-function calculateQuantile(value, minValue, maxValue) {
-    const range = maxValue - minValue;
-    const index = Math.floor(((value - minValue) / range) * (schemes[0].colors.length));
-    return Math.max(0, Math.min(index, schemes[0].colors.length - 1)); // Clamping to valid indices
-}
-
 // Initially load map with default values
 document.addEventListener('DOMContentLoaded', () => {
     const initialYear = availableYears[0]; // Default to first available year
@@ -401,11 +425,15 @@ function getColor(value, minValue, maxValue) {
     // Check if the value is negative, and if so, return a specific color.
     if (numValue < 0) {
         
-        scale = chroma.scale(['#020F70','#b0c4de' ]).domain([minValue, 0]);
+        scale = chroma.scale(['#020F70','#fce3e3' ]).domain([minValue, 0]);
     }else{
        
-        scale = chroma.scale(['#FEE7E9', '#A40311']).domain([0, maxValue]);
+        scale = chroma.scale(['#fce3e3', '#A40311']).domain([0, maxValue]);
     }
+  
+       
+       
+    
 
    
     // Use the scale to get the color for the current value.
@@ -540,7 +568,7 @@ document.getElementById('sheet-select1').addEventListener('change', function () 
     //fetchAndDisplayDataForHeatmap(selectedSheet,document.getElementById('year-select').value);
     var url = `/sheet_data/${encodeURIComponent(selectedSheet)}?year=${encodeURIComponent(selectedYear)}`;
     
-    fetchAndCreateChoropleth(url, mapid);
+    //fetchAndCreateChoropleth(url, mapid);
     //updateD3Map(selectedSheet, selectedYear);
 
 
@@ -553,7 +581,7 @@ document.getElementById('sheet-select2').addEventListener('change', function () 
 
     //fetchAndDisplayDataForHeatmap(selectedSheet,document.getElementById('year-select').value);
     var url = `/sheet_data/${encodeURIComponent(selectedSheet)}?year=${encodeURIComponent(selectedYear)}`;
-    fetchAndCreateChoropleth(url, mapid);
+    //fetchAndCreateChoropleth(url, mapid);
 
 
 
@@ -564,7 +592,7 @@ document.getElementById('sheet-select3').addEventListener('change', function () 
     const mapid = mymapArray[2];
     //fetchAndDisplayDataForHeatmap(selectedSheet,document.getElementById('year-select').value);
     var url = `/sheet_data/${encodeURIComponent(selectedSheet)}?year=${encodeURIComponent(selectedYear)}`;
-    fetchAndCreateChoropleth(url, mapid);
+    //fetchAndCreateChoropleth(url, mapid);
 
 
 
@@ -575,7 +603,7 @@ document.getElementById('sheet-select4').addEventListener('change', function () 
     const mapid = mymapArray[3];
     //fetchAndDisplayDataForHeatmap(selectedSheet,document.getElementById('year-select').value);
     var url = `/sheet_data/${encodeURIComponent(selectedSheet)}?year=${encodeURIComponent(selectedYear)}`;
-    fetchAndCreateChoropleth(url, mapid);
+    //fetchAndCreateChoropleth(url, mapid);
 
 
 
@@ -589,7 +617,7 @@ async function updateMaps(visualizationType) {
         
          // Assumes sheet-select IDs are sequentially named
         const selectedSheet = document.getElementById(`sheet-select${j.toString()}`).value;
-        console.log(selectedSheet)
+        
         const geojsonUrl = `/sheet_data/${encodeURIComponent(selectedSheet)}?year=${encodeURIComponent(selectedYear)}`;
 
        
@@ -611,6 +639,9 @@ async function updateMaps(visualizationType) {
                 break;
             case 'dotmap':
                 createDotMapLayer(map, geojsonData);
+                break;
+            case 'bivariate':
+                updateBivariateChoroplethMap();
                 break;
             default:
                 console.error("Unsupported visualization type:", visualizationType);
@@ -636,7 +667,7 @@ async function updateMapVisualization(map, geojsonUrl, visualizationType) {
     const geojsonData = await fetchGeoJSON(geojsonUrl);
 
     if (!geojsonData) {
-        console.log("No data to display.");
+        
         return;
     }
 
@@ -645,6 +676,7 @@ async function updateMapVisualization(map, geojsonUrl, visualizationType) {
             createChoroplethLayer(map, geojsonData);
             break;
         case 'heatmap':
+            
             createHeatmapLayer(map, geojsonData);
             break;
         case 'dotmap':
@@ -661,20 +693,69 @@ document.getElementById('visualizationType').addEventListener('change', function
     updateMaps(selectedType);
 });
 
-function createHeatmapLayer(map, geojsonData) {
-    // Convert GeoJSON data to the format expected by the heatmap plugin
-    const heatmapPoints = geojsonData.features.map(feature => {
-        return [
-            feature.geometry.coordinates[1], // latitude
-            feature.geometry.coordinates[0], // longitude
-            1 // intensity - adjust this based on your actual data
-        ];
+function createHeatmapLayer(map, geojsonData, selectedYear) {
+    // Retrieve the selected year from the dropdown
+    //const selectedYear = document.getElementById('year-select').value;
+    
+    // Initialize an empty array for heatmap points
+    const heatmapPoints = [];
+
+    // Process each feature in the GeoJSON data
+    geojsonData.features.forEach(feature => {
+        // Get the value for the selected year from the feature's properties
+        const value = parseFloat(feature.properties[selectedYear]);
+        let intensity = 1; // Default intensity
+        if (!isNaN(value) && value > 0) {
+            // Optionally, scale the intensity value here if needed
+            intensity = Math.log(value); // Using a log scale as an example
+        }
+
+        // Calculate the centroid of the polygon
+        let coords;
+        if (feature.geometry.type === 'Polygon' || feature.geometry.type === 'MultiPolygon') {
+            const centroid = turf.centroid(feature).geometry.coordinates;
+            coords = [centroid[1], centroid[0]]; // Reversed for Leaflet (lat, lng)
+        } else {
+            console.error('Feature is not a Polygon or MultiPolygon:', feature);
+        }
+
+        if (coords && coords.length === 2) {
+            heatmapPoints.push([...coords, intensity]); // Append the coords and intensity to the points array
+        }
     });
 
-    const heatmapLayer = L.heatmapLayer(heatmapPoints, {radius: 25}).addTo(map);
-    console.log(heatmapLayer)
-    heatmapLayer.addto(map);
+    // Add the heatmap layer to the map if there are points to display
+    if (heatmapPoints.length) {
+        const heatmapLayer = L.heatLayer(heatmapPoints, {
+            radius: 25, // This can be adjusted or scaled based on zoom level
+            blur: 15, // Adjust for smoother visual
+            maxZoom: 17,
+        }).addTo(map);
+    } else {
+        console.error("No points generated for the heatmap.");
+    }
 }
+
+
+// Example normalization function, adjust as needed
+function normalizeIntensity(value, min, max) {
+    return (value - min) / (max - min);
+}
+
+// Example function to get the range of your data values
+function getDataRange(geojsonData) {
+    let min = Infinity, max = -Infinity;
+    const selectedYear = document.getElementById('year-select').value;
+    geojsonData.features.forEach(feature => {
+        const value = parseFloat(feature.properties[selectedYear]);
+        if (!isNaN(value)) {
+            min = Math.min(min, value);
+            max = Math.max(max, value);
+        }
+    });
+    return {min, max};
+}
+
 function createDotMapLayer(map, geojsonData) {
     geojsonData.features.forEach(feature => {
         let coords = feature.geometry.coordinates;
@@ -712,52 +793,55 @@ function createMarker(map, coords) {
     }
 }
 function calculateRadius(value) {
-    // Simple example: scale the radius based on the value
-    // You might want to replace this with more sophisticated scaling based on your data range
-    return Math.sqrt(value) * 2; // Example scaling - square root scaling to reduce the range
+   
+    return Math.sqrt(value) * 2;
 }
-///CLEAR MAP LAYERS
 function clearAllMapLayers() {
+    // Clear Leaflet maps
     mymapArray.forEach(map => {
-        
         let tileLayer;
         map.eachLayer(layer => {
-            if (layer instanceof L.TileLayer && !tileLayer) {
-                tileLayer = layer;
-            } else {
+            if (!(layer instanceof L.TileLayer)) {
                 map.removeLayer(layer);
+            } else {
+                tileLayer = layer;
             }
         });
-        // Clear the reference to the choropleth layer if you keep one
-        if (map.choroplethLayer) {
-            map.choroplethLayer = null;
+
+        if (map.legend) {
+            map.removeControl(map.legend);
+            map.legend = null;
         }
+
+        if (map.colorLabelGroup) {
+            map.removeLayer(map.colorLabelGroup);
+            map.colorLabelGroup = null;
+        }
+
+        // Additional clearing operations for Leaflet maps as necessary
     });
+
+    // Clear D3 visualization
+    d3.select('#d3-container').html(""); // This removes the SVG and all its children, effectively clearing the D3 map
 }
-document.addEventListener('DOMContentLoaded', updateMapWithSelectedSheets);
-// Add event listeners for sheet selection changes
-document.getElementById('sheet-select1').addEventListener('change', updateMapWithSelectedSheets);
-document.getElementById('sheet-select2').addEventListener('change', updateMapWithSelectedSheets);
-document.getElementById('sheet-select3').addEventListener('change', updateMapWithSelectedSheets);
-document.getElementById('sheet-select4').addEventListener('change', updateMapWithSelectedSheets);
-//document.getElementById('year-select').addEventListener('change', updateMaps);
 
 var updateButton = document.getElementById('update-button');
-var visualizationType= document.getElementById('visualizationType').value;
-if (updateButton) { // Check if the button exists
+
+if (updateButton) { 
     updateButton.addEventListener('click', function () {
+        let visualizationType= document.getElementById('visualizationType').value;
         updateMaps(visualizationType);
         updateBivariateChoroplethMap();
-         // Call the UpdateMaps function when the button is clicked
+        
     });
 }
 var clearLayersButton = document.getElementById('clear-layers-button');
 if (clearLayersButton) {
     clearLayersButton.addEventListener('click', function () {
-        clearAllMapLayers(); // Call the function to clear layers when button is clicked
+        clearAllMapLayers(); 
     });
 }
-// Initialize map with default sheet selections
+
 
 
 var form = document.getElementById('file-upload-form');

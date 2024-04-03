@@ -161,11 +161,6 @@ for sheet_name, df in sheets_df.items():
     # Store the quantiles in the merged_data_dict as well
     merged_data_dict[sheet_name]['quantiles'] = quantiles_dict
 
-# Function to calculate quantiles, assuming it's defined
-def calculate_quantiles(merged_df, column):
-    return merged_df[column].quantile([0.25, 0.5, 0.75]).to_dict()
-
-heatmap_data = []
 
 
 
@@ -243,6 +238,26 @@ def update_application_state(new_file_path):
     except Exception as e:
         logging.error(f"Failed to update application state: {str(e)}")
 
+def get_sheet_data_with_full_name(filename):
+    """Scan each sheet in the given Excel file for 'NOSAUKUMS' and return sheet data along with full names."""
+    full_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    xls = pd.ExcelFile(full_path)
+    sheet_full_names = {}
+
+    for sheet_name in xls.sheet_names:
+        df = pd.read_excel(xls, sheet_name=sheet_name)
+        
+        # Assuming 'NOSAUKUMS' might be in a specific cell at the bottom of the sheet
+        # Here, we're scanning the last 10 rows for simplicity; adjust as needed
+        nosaukums_row = df.tail(10).apply(lambda row: row.str.contains('NOSAUKUMS', case=False, na=False)).any(axis=1)
+        if nosaukums_row.any():
+            # Assuming the full name is in the cell immediately following 'NOSAUKUMS'
+            full_name_row_index = nosaukums_row[nosaukums_row].index[0]  # Get the index of the first true value
+            full_name = df.iloc[full_name_row_index].dropna().values[1]  # Adjust indexing based on actual layout
+            sheet_full_names[sheet_name] = full_name
+
+    return sheet_full_names
+
 #
 #Routes
 #
@@ -288,9 +303,9 @@ def get_sheets(filename):
 @app.route('/sheet_data/<path:sheet_name>')
 def get_sheet_data(sheet_name):
     
-    print(f"Requested sheet name: {sheet_name}")  # Debug print
+    
     year = request.args.get('year')
-    print(f"Requested year: {year}")  # Debug print
+  
     try:
         year = request.args.get('year')
        # Get the year from the query parameter
