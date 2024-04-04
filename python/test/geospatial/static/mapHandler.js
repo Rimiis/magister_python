@@ -332,18 +332,22 @@ function updateBivariateChoroplethMap() {
 
         // Assuming projection is defined elsewhere according to your geographic focus
         const path = d3.geoPath().projection(projection);
-        const selectedScheme = schemes.find(scheme => scheme.name === "RdBu").colors;
+        const selectedScheme = schemes.find(scheme => scheme.name === "BuPu").colors;
         svg.selectAll('path')
             .data(data1.features)
             .enter().append('path')
             .attr('d', path) // Draw each feature using the path generator
             .attr('fill', d => {
+                const minValue1 = d3.min(data1.features, d => parseFloat(d.properties[selectedYear]));
+                const maxValue1 = d3.max(data1.features, d => parseFloat(d.properties[selectedYear]));
+                const minValue2 = d3.min(data2.features, d => parseFloat(d.properties[selectedYear]));
+                const maxValue2 = d3.max(data2.features, d => parseFloat(d.properties[selectedYear]));
                 const value1 = d.properties[selectedYear] ? parseFloat(d.properties[selectedYear]) : 0;
                 const matchingFeature = data2.features.find(f => f.properties.NOSAUKUMS === d.properties.NOSAUKUMS);
                 const value2 = matchingFeature && matchingFeature.properties[selectedYear] ? parseFloat(matchingFeature.properties[selectedYear]) : 0;
 
                 // Use a function to determine the fill color based on value1 and value2
-                return getBivariateColor(value1, value2);
+                return getBivariateColor(value1, value2, minValue1, maxValue1, minValue2, maxValue2);
             })
             .attr('stroke', 'black') // Optional: adds a stroke around each polygon
             .attr('stroke-width', 1);
@@ -399,28 +403,29 @@ function renderLegend() {
         .text(label);
     });
 }
+function getBivariateColor(value1, value2, minValue1, maxValue1, minValue2, maxValue2) {
+    // Determine the quantiles for both values
+    const quantile1 = calculateQuantile(value1, minValue1, maxValue1);
+    const quantile2 = calculateQuantile(value2, minValue2, maxValue2);
 
-// Dummy implementation - replace with your actual logic
-function getBivariateColor(value1, value2) {
-    // Implement logic to determine color based on the two values
-    // Placeholder: simple linear interpolation example
-    const colorScale = d3.scaleLinear().domain([0, 500]).range(["blue", "red"]);
-    return colorScale((value1 + value2) / 2);
+    // Assuming you have 3 categories (low, medium, high), reflected in a 3x3 color matrix
+    const colorMatrixIndex = quantile1 * 3 + quantile2; // This will give you an index between 0 and 8
+    const selectedScheme = schemes.find(scheme => scheme.name === "BuPu").colors; // Or any other scheme name you want to use
+
+    return selectedScheme[colorMatrixIndex];
+}
+
+// Helper function to calculate quantile index
+function calculateQuantile(value, minValue, maxValue) {
+    const range = maxValue - minValue;
+    const quantile = (value - minValue) / range;
+
+    if (quantile < 1 / 3) return 0; // Low
+    if (quantile < 2 / 3) return 1; // Medium
+    return 2; // High
 }
 
 
-function getBivariateColorScale(minValue1, maxValue1, minValue2, maxValue2) {
-    const scaleValue1 = d3.scaleLinear().domain([minValue1, maxValue1]).range([0, 1]);
-    const scaleValue2 = d3.scaleLinear().domain([minValue2, maxValue2]).range([0, 1]);
-
-    return (value1, value2) => {
-        const normalizedValue1 = scaleValue1(value1);
-        const normalizedValue2 = scaleValue2(value2);
-        const color1 = d3.interpolateLab("blue", "red")(normalizedValue1);
-        const color2 = d3.interpolateLab("white", "green")(normalizedValue2);
-        return d3.interpolateLab(color1, color2)(0.5); // Blends the two colors
-    };
-}
 // Initially load map with default values
 document.addEventListener('DOMContentLoaded', () => {
     const initialYear = availableYears[0]; // Default to first available year
@@ -443,20 +448,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Assuming minValue and maxValue have been calculated based on your data
             
 
-            // Select your SVG container and bind your data
-            const svg = d3.select('#d3-container').select('svg');
-            const features = svg.selectAll('path')
-                .data(geojsonData.features)
-                .enter()
-                .append('path')
-                // Use the D3 geoPath generator for the 'd' attribute
-                .attr('d', d3.geoPath().projection(projection))
-                // Use your getColor function to style the 'fill' attribute based on feature properties
-                .attr('fill', d => {
-                    // Assume your value is stored under properties.value
-                    const value = d.properties[`${selectedYear}`];
-                    return getColor(value, minValue, maxValue); // Use your getColor function here
-                });
+            
         });
 
     

@@ -124,45 +124,49 @@ def calculate_quantiles(df, column):
         # Return None or an appropriate value if the column is not numeric
         return None
 
-for sheet_name, df in sheets_df.items():
-    # Convert columns to string to ensure proper merging
-    df = df.astype(str)
+
+
+def merge_data(sheets_df):
     
-    # Determine the appropriate GeoDataFrame and merge columns based on the sheet's contents
-    if 'Teritoriālais iedalījums' in df.columns:
-        merge_columns = ('L1_name', 'Teritoriālais iedalījums')
-        gdf_used = gdf
-    else:
-        merge_columns = ('NOSAUKUMS', 'Pašvaldība')
-        gdf_used = gdf_2
-    
-    # Perform the initial merge
-    merged_df = gdf_used.merge(df, left_on=merge_columns[0], right_on=merge_columns[1], how='left')
-    
-    # If we are using 'NOSAUKUMS' and 'Pašvaldība' as merge columns,
-    # check for unmatched rows and perform a secondary merge with gdf_2 using 'LABEL'
-    if merge_columns == ('NOSAUKUMS', 'Pašvaldība'):
-        # Identify rows in df that didn't match
-        unmatched_df = df[~df[merge_columns[1]].isin(merged_df[merge_columns[1]])]
+    for sheet_name, df in sheets_df.items():
+        # Convert columns to string to ensure proper merging
+        df = df.astype(str)
         
-        if not unmatched_df.empty:
-            matched_using_label = gdf_2.merge(unmatched_df, left_on='LABEL', right_on=merge_columns[1], how='inner')
-            # Concatenate the matched rows using LABEL with the main merged DataFrame
-            merged_df = pd.concat([merged_df, matched_using_label], ignore_index=True)
-    
-    # Ensure the result is a GeoDataFrame
-    merged_data_dict[sheet_name] = gpd.GeoDataFrame(merged_df, geometry='geometry')
+        # Determine the appropriate GeoDataFrame and merge columns based on the sheet's contents
+        if 'Teritoriālais iedalījums' in df.columns:
+            merge_columns = ('L1_name', 'Teritoriālais iedalījums')
+            gdf_used = gdf
+        else:
+            merge_columns = ('NOSAUKUMS', 'Pašvaldība')
+            gdf_used = gdf_2
+        
+        # Perform the initial merge
+        merged_df = gdf_used.merge(df, left_on=merge_columns[0], right_on=merge_columns[1], how='left')
+        
+        # If we are using 'NOSAUKUMS' and 'Pašvaldība' as merge columns,
+        # check for unmatched rows and perform a secondary merge with gdf_2 using 'LABEL'
+        if merge_columns == ('NOSAUKUMS', 'Pašvaldība'):
+            # Identify rows in df that didn't match
+            unmatched_df = df[~df[merge_columns[1]].isin(merged_df[merge_columns[1]])]
+            
+            if not unmatched_df.empty:
+                matched_using_label = gdf_2.merge(unmatched_df, left_on='LABEL', right_on=merge_columns[1], how='inner')
+                # Concatenate the matched rows using LABEL with the main merged DataFrame
+                merged_df = pd.concat([merged_df, matched_using_label], ignore_index=True)
+        
+        # Ensure the result is a GeoDataFrame
+        merged_data_dict[sheet_name] = gpd.GeoDataFrame(merged_df, geometry='geometry')
 
-    # Calculate quantiles for numeric columns and store the results
-    quantiles_dict = {}
-    for column in merged_df.select_dtypes(include='number').columns:
-        quantiles_dict[column] = calculate_quantiles(merged_df, column)
-    
-    # Store the quantiles in the merged_data_dict as well
-    merged_data_dict[sheet_name]['quantiles'] = quantiles_dict
+        # Calculate quantiles for numeric columns and store the results
+        quantiles_dict = {}
+        for column in merged_df.select_dtypes(include='number').columns:
+            quantiles_dict[column] = calculate_quantiles(merged_df, column)
+        
+        # Store the quantiles in the merged_data_dict as well
+        merged_data_dict[sheet_name]['quantiles'] = quantiles_dict
 
 
-
+merge_data(sheets_df)
 
 
 
@@ -184,73 +188,31 @@ def preprocess_merge_columns(df, columns):
 
 
 def update_application_state(new_file_path):
-    global sheets_df, quantiles_info  # Access global variables
+    global sheets_df, merged_data_dict  # Access global variables
     try:
-            # Path to the directory containing Excel files
-
-
-        # List all Excel files in the directory
-        excel_files = glob.glob(os.path.join(uploads_dir, '*.xlsx'))
-
-        # Iterate over each Excel file
-        for excel_file in excel_files:
-            # Load the Excel file
-            xls = pd.ExcelFile(excel_file)
-            
-            # Get the basename of the file (for use in the dictionary keys)
-            base_filename = os.path.basename(excel_file)
-            
-            # Iterate over each sheet in the Excel file
-            for sheet_name in xls.sheet_names:
-                # Read the sheet into a DataFrame, ensuring all data is read as strings
-                df = pd.read_excel(xls, sheet_name=sheet_name, header=0, dtype=str)
-                
-                # Create a unique key for the sheet using both the filename and sheet name
-                # This avoids overwriting data from sheets with the same name in different files
-                key = f'{sheet_name}'
-                
-                # Store the DataFrame in the dictionary
-                sheets_df[key] = df
+        # Clear the existing data to make way for the new upload
+        sheets_df.clear()
+        merged_data_dict.clear()
         
-        for sheet_name, df in sheets_df.items():
-            # Preprocess merge columns
-            df = preprocess_merge_columns(df, ['L1_name', 'Teritoriālais iedalījums', 'NOSAUKUMS', 'Pašvaldība', 'LABEL'])
-            gdf = preprocess_merge_columns(gdf, ['L1_name'])
-            gdf_2 = preprocess_merge_columns(gdf_2, ['NOSAUKUMS', 'LABEL'])
+        # Load the new Excel file
+        xls = pd.ExcelFile(new_file_path)
+        
+        # Iterate over each sheet in the Excel file
+        for sheet_name in xls.sheet_names:
+            # Read the sheet into a DataFrame, ensuring all data is read as strings
+            df = pd.read_excel(xls, sheet_name=sheet_name, header=0, dtype=str)
             
-            if 'Teritoriālais iedalījums' in df.columns:
-                merge_columns = ('L1_name', 'Teritoriālais iedalījums')
-                gdf_used = gdf
-            else:
-                merge_columns = ('NOSAUKUMS', 'Pašvaldība')
-                gdf_used = gdf_2
+            # Store the DataFrame in the dictionary
+            sheets_df[sheet_name] = df
             
-            # Perform the initial merge
-            merged_df = pd.merge(gdf_used, df, left_on=merge_columns[0], right_on=merge_columns[1], how='left')
+        # Now we need to merge this data with the geospatial data
+        merge_data(sheets_df)
+    except Exception as e:
+        logging.error(f"Failed to update application state: {str(e)}")
 
-            # Logging for diagnostic purposes
-            print(f"Merged DataFrame for sheet '{sheet_name}':")
-            print(merged_df.head())
-            #print(merged_df)
-            # Attempt to merge unmatched rows, if necessary
-            if 'LABEL' in df.columns and 'Pašvaldība' in merged_df.columns:
-                unmatched = merged_df[merged_df['Pašvaldība'].isna()]
-                print(unmatched)
-                if not unmatched.empty:
-                    matched_using_label = gdf_2.merge(unmatched, left_on='LABEL', right_on='Pašvaldība', how='left')
-                    print(matched_using_label)
-                    merged_df.update(matched_using_label)
+         
             
-            # Ensure the result is a GeoDataFrame
-            merged_data_dict[sheet_name] = gpd.GeoDataFrame(merged_df, geometry='geometry')
-            
-            # Calculate quantiles for numeric columns and store the results
-            quantiles_dict = {}
-            for column in merged_df.select_dtypes(include='number').columns:
-                quantiles_dict[column] = calculate_quantiles(merged_df, column)
-            
-            # Assuming you want to store the quantiles in the merged_data_dict as well
-            merged_data_dict[sheet_name]['quantiles'] = quantiles_dict        
+                
     except Exception as e:
         logging.error(f"Failed to update application state: {str(e)}")
 
