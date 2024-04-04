@@ -260,9 +260,11 @@ def upload_file():
     file.save(save_path)
 
     # Call the function to update application state
-    update_application_state(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-    return jsonify({'message': 'File uploaded successfully', 'filename': filename}), 200
-    #jsonify({'message': 'File uploaded and application state updated successfully'}), 200
+    update_application_state(save_path)
+    
+    # Return a response that indicates a successful upload
+    return jsonify({'message': 'File uploaded successfully', 'filename': filename, 'status': 'success'}), 200
+
   
 
 @app.route('/sheets/<filename>')

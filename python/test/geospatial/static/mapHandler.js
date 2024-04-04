@@ -884,28 +884,28 @@ if (clearLayersButton) {
 
 
 
-var form = document.getElementById('file-upload-form');
-var fileInput = document.getElementById('file-input');
+document.getElementById('file-upload-form').addEventListener('submit', function(e) {
+    e.preventDefault();  // Prevent the default form submission
+    const formData = new FormData(this);
 
-form.onsubmit = async (e) => {
-    e.preventDefault(); // Prevent default form submission behavior
-    const formData = new FormData(form);
-
-    try {
-        const response = await fetch('http://localhost:5000/upload', {
-            method: 'POST', // Ensure method is POST
-            body: formData,
-        });
-
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
+    fetch('/upload', {
+        method: 'POST',
+        body: formData,
+    })
+    .then(response => response.json())
+    .then(data => {
+        if(data.status === 'success') {
+            // Refresh the page to update dropdowns and other components
+            window.location.reload();
+        } else {
+            // Handle the case where the server did not return a success status
+            console.error('File upload failed');
         }
-
-        
-    } catch (error) {
-        console.error('Upload failed:', error);
-    }
-};
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+});
 
 
 function populateXlsxFileSelect() {
