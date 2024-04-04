@@ -13,8 +13,7 @@ from shapely.geometry import Point
 from folium.plugins import HeatMap
 from werkzeug.utils import secure_filename
 
-
-#initialize flask app
+# initialize flask app
 app = Flask(__name__)
 global df
 UPLOAD_FOLDER = 'C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/upload/'  # Specify the upload folder path
@@ -23,11 +22,9 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB upload limit
 
 
-
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
 
 
 def assign_color(value, max_value):
@@ -45,7 +42,7 @@ def assign_color(value, max_value):
     elif ratio > 0.25: return '#FEB24C'
     elif ratio > 0.125: return '#FED976'
     else: return '#FFEDA0'
-  # Declare global if these variables are to be updated
+
 
 logging.basicConfig(filename='app.log', level=logging.DEBUG,
                     format='%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s')
@@ -81,40 +78,6 @@ sheets_df = {}
 merged_data_dict = {}
 
 
-
-
-
-# Path to the directory containing Excel files
-
-
-# List all Excel files in the directory
-
-
-# Iterate over each Excel file
-excel_files = glob.glob(os.path.join(uploads_dir, '*.xlsx'))
-for excel_file in excel_files:
-    # Load the Excel file
-    xls = pd.ExcelFile(excel_file)
-    
-    # Get the basename of the file (for use in the dictionary keys)
-    base_filename = os.path.basename(excel_file)
-    
-    # Iterate over each sheet in the Excel file
-    for sheet_name in xls.sheet_names:
-        # Read the sheet into a DataFrame, ensuring all data is read as strings
-        df = pd.read_excel(xls, sheet_name=sheet_name, header=0, dtype=str)
-        
-        # Create a unique key for the sheet using both the filename and sheet name
-        # This avoids overwriting data from sheets with the same name in different files
-        key = f'{sheet_name}'
-        
-        # Store the DataFrame in the dictionary
-        sheets_df[key] = df
-
-
-
-
-
 def calculate_quantiles(df, column):
     """Calculate quantiles for a given column in a DataFrame."""
     # Ensure the column is numeric
@@ -125,10 +88,9 @@ def calculate_quantiles(df, column):
         return None
 
 
-
-def merge_data(sheets_df):
+def merge_data(new_sheets_df):
     
-    for sheet_name, df in sheets_df.items():
+    for sheet_name, df in new_sheets_df.items():
         # Convert columns to string to ensure proper merging
         df = df.astype(str)
         
@@ -166,33 +128,12 @@ def merge_data(sheets_df):
         merged_data_dict[sheet_name]['quantiles'] = quantiles_dict
 
 
-merge_data(sheets_df)
-
-
-
-quantiles_info = {}  # Global variable to store quantiles
-
-def calculate_quantiles_for_all_columns(df):
-    quantiles = {}
-    for column in df.select_dtypes(include=[np.number]).columns:
-        quantiles[column] = df[column].quantile([0.2, 0.4, 0.6, 0.8]).tolist()
-    return quantiles
-
-def preprocess_merge_columns(df, columns):
-    """Preprocess specified columns in a dataframe for merging."""
-    for col in columns:
-        if col in df.columns:
-            # Convert to string and strip leading/trailing whitespaces
-            df[col] = df[col].astype(str).str.strip()
-    return df
-
-
 def update_application_state(new_file_path):
     global sheets_df, merged_data_dict  # Access global variables
     try:
         # Clear the existing data to make way for the new upload
-        sheets_df.clear()
-        merged_data_dict.clear()
+        new_sheets_df = {}
+        new_merged_data_dict = {}
         
         # Load the new Excel file
         xls = pd.ExcelFile(new_file_path)
@@ -203,48 +144,54 @@ def update_application_state(new_file_path):
             df = pd.read_excel(xls, sheet_name=sheet_name, header=0, dtype=str)
             
             # Store the DataFrame in the dictionary
-            sheets_df[sheet_name] = df
+            new_sheets_df[sheet_name] = df
             
         # Now we need to merge this data with the geospatial data
-        merge_data(sheets_df)
-    except Exception as e:
-        logging.error(f"Failed to update application state: {str(e)}")
-
-         
-            
-                
-    except Exception as e:
-        logging.error(f"Failed to update application state: {str(e)}")
-
-def get_sheet_data_with_full_name(filename):
-    
-    full_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    xls = pd.ExcelFile(full_path)
-    sheet_full_names = {}
-
-    for sheet_name in xls.sheet_names:
-        df = pd.read_excel(xls, sheet_name=sheet_name)
+        merge_data(new_sheets_df)
         
-        # Assuming 'NOSAUKUMS' might be in a specific cell at the bottom of the sheet
-        # Here, we're scanning the last 10 rows for simplicity; adjust as needed
-        nosaukums_row = df.tail(10).apply(lambda row: row.str.contains('NOSAUKUMS', case=False, na=False)).any(axis=1)
-        if nosaukums_row.any():
-            # Assuming the full name is in the cell immediately following 'NOSAUKUMS'
-            full_name_row_index = nosaukums_row[nosaukums_row].index[0]  # Get the index of the first true value
-            full_name = df.iloc[full_name_row_index].dropna().values[1]  # Adjust indexing based on actual layout
-            sheet_full_names[sheet_name] = full_name
+        sheets_df.update(new_sheets_df)
+        merged_data_dict.update(new_merged_data_dict)
+    except Exception as e:
+        logging.error(f"Failed to update application state: {str(e)}")
 
-    return sheet_full_names
+
+def calculate_quantiles_for_all_columns(df):
+    """Calculate quantiles for all numeric columns in a DataFrame."""
+    quantiles = {}
+    for column in df.select_dtypes(include=[np.number]).columns:
+        quantiles[column] = df[column].quantile([0.2, 0.4, 0.6, 0.8]).tolist()
+    return quantiles
+
+
+def preprocess_merge_columns(df, columns):
+    """Preprocess specified columns in a dataframe for merging."""
+    for col in columns:
+        if col in df.columns:
+            # Convert to string and strip leading/trailing whitespaces
+            df[col] = df[col].astype(str).str.strip()
+    return df
+
+
+# Path to the directory containing Excel files
+uploads_dir = "C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/upload/"
+
+# List all Excel files in the directory
+excel_files = glob.glob(os.path.join(uploads_dir, '*.xlsx'))
+
+# Iterate over each Excel file
+for excel_file in excel_files:
+    update_application_state(excel_file)
 
 #
-#Routes
+# Routes
 #
-
 @app.route('/list-xlsx-files')
 def list_xlsx_files():
     uploads_dir = 'C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/upload/'  # Update this path
     files = [f for f in os.listdir(uploads_dir) if f.endswith('.xlsx')]
     return jsonify(files)
+
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
@@ -254,18 +201,15 @@ def upload_file():
     if file.filename == '' or not allowed_file(file.filename):
         flash('No selected file or invalid file type')
         return redirect(request.url)
-    
+
     filename = secure_filename(file.filename)
     save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(save_path)
 
     # Call the function to update application state
     update_application_state(save_path)
-    
-    # Return a response that indicates a successful upload
-    return jsonify({'message': 'File uploaded successfully', 'filename': filename, 'status': 'success'}), 200
+    return jsonify({'message': 'File uploaded successfully', 'filename': filename}), 200
 
-  
 
 @app.route('/sheets/<filename>')
 def get_sheets(filename):
@@ -278,24 +222,22 @@ def get_sheets(filename):
         return jsonify({'sheets': sheet_names})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-    
+
 
 @app.route('/sheet_data/<path:sheet_name>')
 def get_sheet_data(sheet_name):
     
-    
     year = request.args.get('year')
   
     try:
-       
-       # Get the year from the query parameter
+        # Get the year from the query parameter
         if sheet_name in merged_data_dict:
             
             merged_geo_df = merged_data_dict[sheet_name]
             
             if year and year in merged_geo_df.columns:
                 # Filter the GeoDataFrame for the selected year
-                # Here you could also calculate the min and max values for color scaling
+                # Here you could alsocalculate the min and max values for color scaling
                 merged_geo_df[year] = merged_geo_df[year].apply(lambda x: round(float(x), 1) if pd.notnull(x) else x)
                 filtered_df = merged_geo_df[[year, 'geometry']]
                 min_value = filtered_df[year].min()
@@ -320,9 +262,9 @@ def get_sheet_data(sheet_name):
 
 @app.route('/')
 def index():
-    logging.debug("Index route is called.")  
+    logging.debug("Index route is called.")
 
-    return render_template("map.html" )
+    return render_template("map.html")
 
 if __name__ == '__main__':
-    app.run(debug=True, threaded=True) 
+    app.run(debug=True, threaded=True)
