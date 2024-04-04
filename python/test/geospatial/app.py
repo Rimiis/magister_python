@@ -174,6 +174,15 @@ def calculate_quantiles_for_all_columns(df):
         quantiles[column] = df[column].quantile([0.2, 0.4, 0.6, 0.8]).tolist()
     return quantiles
 
+def preprocess_merge_columns(df, columns):
+    """Preprocess specified columns in a dataframe for merging."""
+    for col in columns:
+        if col in df.columns:
+            # Convert to string and strip leading/trailing whitespaces
+            df[col] = df[col].astype(str).str.strip()
+    return df
+
+
 def update_application_state(new_file_path):
     global sheets_df, quantiles_info  # Access global variables
     try:
@@ -204,10 +213,11 @@ def update_application_state(new_file_path):
                 sheets_df[key] = df
         
         for sheet_name, df in sheets_df.items():
-            # Convert columns to string to ensure proper merging
-            df = df.map(str)
+            # Preprocess merge columns
+            df = preprocess_merge_columns(df, ['L1_name', 'Teritoriālais iedalījums', 'NOSAUKUMS', 'Pašvaldība', 'LABEL'])
+            gdf = preprocess_merge_columns(gdf, ['L1_name'])
+            gdf_2 = preprocess_merge_columns(gdf_2, ['NOSAUKUMS', 'LABEL'])
             
-            # Determine the appropriate GeoDataFrame and merge columns based on the sheet's contents
             if 'Teritoriālais iedalījums' in df.columns:
                 merge_columns = ('L1_name', 'Teritoriālais iedalījums')
                 gdf_used = gdf
@@ -216,13 +226,19 @@ def update_application_state(new_file_path):
                 gdf_used = gdf_2
             
             # Perform the initial merge
-            merged_df = gdf_used.merge(df, left_on=merge_columns[0], right_on=merge_columns[1], how='left')
-            
+            merged_df = pd.merge(gdf_used, df, left_on=merge_columns[0], right_on=merge_columns[1], how='left')
+
+            # Logging for diagnostic purposes
+            print(f"Merged DataFrame for sheet '{sheet_name}':")
+            print(merged_df.head())
+            #print(merged_df)
             # Attempt to merge unmatched rows, if necessary
             if 'LABEL' in df.columns and 'Pašvaldība' in merged_df.columns:
                 unmatched = merged_df[merged_df['Pašvaldība'].isna()]
+                print(unmatched)
                 if not unmatched.empty:
-                    matched_using_label = gdf_2.merge(unmatched, left_on='LABEL', right_on='Pašvaldība', how='inner')
+                    matched_using_label = gdf_2.merge(unmatched, left_on='LABEL', right_on='Pašvaldība', how='left')
+                    print(matched_using_label)
                     merged_df.update(matched_using_label)
             
             # Ensure the result is a GeoDataFrame
@@ -239,7 +255,7 @@ def update_application_state(new_file_path):
         logging.error(f"Failed to update application state: {str(e)}")
 
 def get_sheet_data_with_full_name(filename):
-    """Scan each sheet in the given Excel file for 'NOSAUKUMS' and return sheet data along with full names."""
+    
     full_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     xls = pd.ExcelFile(full_path)
     sheet_full_names = {}
@@ -307,7 +323,7 @@ def get_sheet_data(sheet_name):
     year = request.args.get('year')
   
     try:
-        year = request.args.get('year')
+       
        # Get the year from the query parameter
         if sheet_name in merged_data_dict:
             
@@ -316,6 +332,7 @@ def get_sheet_data(sheet_name):
             if year and year in merged_geo_df.columns:
                 # Filter the GeoDataFrame for the selected year
                 # Here you could also calculate the min and max values for color scaling
+                merged_geo_df[year] = merged_geo_df[year].apply(lambda x: round(float(x), 1) if pd.notnull(x) else x)
                 filtered_df = merged_geo_df[[year, 'geometry']]
                 min_value = filtered_df[year].min()
                 max_value = filtered_df[year].max()

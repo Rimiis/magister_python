@@ -72,9 +72,6 @@ let sheetsData = {
     // Add more sheets as needed
 };
 
-
-
-
 function addLegend(map, colors, values) {
     const legend = L.control({ position: 'bottomright' });
 
@@ -351,7 +348,56 @@ function updateBivariateChoroplethMap() {
             .attr('stroke', 'black') // Optional: adds a stroke around each polygon
             .attr('stroke-width', 1);
     })
-    .catch(error => console.error('Error updating D3 map:', error));
+   
+    
+
+    
+}
+
+
+function renderLegend() {
+    const legendSvg = d3.select('#legend-container').html("").append('svg')
+        .attr('width', 300)
+        .attr('height', 300)
+        .append('g')
+        .attr('transform', 'translate(20,20)');
+    
+    const selectedScheme = schemes.find(scheme => scheme.name === "RdBu").colors;
+    
+
+    const squareSize = 30;
+    selectedScheme.forEach((color, index) => {
+        const row = Math.floor(index / 3);
+        const col = index % 3;
+    
+        legendSvg.append('rect')
+        .attr('x', col * (squareSize + 5)) // 5 is the spacing between squares
+        .attr('y', row * (squareSize + 5))
+        .attr('width', squareSize)
+        .attr('height', squareSize)
+        .style('fill', color);
+    });
+
+    // Example labels for each axis - adjust according to your quantile categories
+    const labelsX = ["Low Var1", "Medium Var1", "High Var1"];
+    const labelsY = ["Low Var2", "Medium Var2", "High Var2"];
+
+    // Adding labels for the X-axis
+    labelsX.forEach((label, index) => {
+    legendSvg.append('text')
+        .attr('x', index * (squareSize + 5) + squareSize / 2) // Center the text under squares
+        .attr('y', 3 * (squareSize + 5) + 20) // Position below the last row of squares
+        .style('text-anchor', 'middle')
+        .text(label);
+    });
+
+    // Adding labels for the Y-axis
+    labelsY.forEach((label, index) => {
+    legendSvg.append('text')
+        .attr('transform', `translate(-30, ${index * (squareSize + 5) + squareSize / 2}) rotate(-90)`) // Rotate and position the text
+        .style('text-anchor', 'middle')
+        .text(label);
+    });
 }
 
 // Dummy implementation - replace with your actual logic
@@ -832,6 +878,8 @@ if (updateButton) {
         let visualizationType= document.getElementById('visualizationType').value;
         updateMaps(visualizationType);
         updateBivariateChoroplethMap();
+        renderLegend();
+        clearAllMapLayers(); 
         
     });
 }
