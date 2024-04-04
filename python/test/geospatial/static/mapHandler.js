@@ -982,13 +982,7 @@ document.getElementById('file-upload-form').addEventListener('submit', function(
     })
     .then(response => response.json())
     .then(data => {
-        if(data.status === 'success') {
-            // Refresh the page to update dropdowns and other components
-            window.location.reload();
-        } else {
-            // Handle the case where the server did not return a success status
-            console.error('File upload failed');
-        }
+        window.location.reload(); // Reload the page
     })
     .catch(error => {
         console.error('Error:', error);
