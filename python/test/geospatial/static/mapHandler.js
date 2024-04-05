@@ -62,11 +62,7 @@ var lastClickedLayer = null;
 var currentGeoJSONLayer = null;
 const availableYears = ['2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023'];
 const width = 960, height = 600;
-let sheetsData = {
-    'sheet1': null, // Placeholder for actual data
-    'sheet2': null, // Placeholder for actual data
-    // Add more sheets as needed
-};
+
 
 function addLegend(map, colors, values) {
     const legend = L.control({ position: 'bottomright' });
@@ -317,137 +313,132 @@ function updateBivariateChoroplethMap() {
     const sheetName2 = document.getElementById('sheet-select2').value;
     const selectedYear = document.getElementById('year-select').value;
     const legendSvg = d3.select('#legend-container').html("").append('svg')
-                .attr('width', 300)
-                .attr('height', 300);
+               .attr('width', 300)
+               .attr('height', 300);
     Promise.all([
         fetch(`/sheet_data/${encodeURIComponent(sheetName1)}?year=${encodeURIComponent(selectedYear)}`).then(res => res.json()),
         fetch(`/sheet_data/${encodeURIComponent(sheetName2)}?year=${encodeURIComponent(selectedYear)}`).then(res => res.json())
     ])
-    .then(([data1, data2]) => {
+   .then(([data1, data2]) => {
         const quantiles1 = calculateQuantiles(data1.features, selectedYear);
         const quantiles2 = calculateQuantiles(data2.features, selectedYear);
-
+  
         const svg = d3.select('#d3-container').html("").append('svg')
-            .attr('width', width)
-            .attr('height', height);
-
+           .attr('width', width)
+           .attr('height', height);
+  
         const path = d3.geoPath().projection(projection);
         svg.selectAll('path')
-            .data(data1.features)
-            .enter().append('path')
-            .attr('d', path)
-            .attr('fill', d => {
+           .data(data1.features)
+           .enter().append('path')
+           .attr('d', path)
+           .attr('fill', d => {
                 const value1 = parseFloat(d.properties[selectedYear]) || 0;
                 const matchingFeature = data2.features.find(f => f.properties.Pašvaldība === d.properties.Pašvaldība);
-                const value2 = matchingFeature ? parseFloat(matchingFeature.properties[selectedYear]) || 0 : 0;
-                console.log("Current feature properties:", d.properties);
-                console.log("Selected year:", selectedYear);
-                console.log("Matching feature:", matchingFeature);
-                // Use the quantile thresholds for coloring
+                const value2 = matchingFeature? parseFloat(matchingFeature.properties[selectedYear]) || 0 : 0;
                 const colorIndex1 = determineColorIndex(value1, quantiles1);
                 const colorIndex2 = determineColorIndex(value2, quantiles2);
-                
-                return schemes[0].colors[colorIndex1 * 3 + colorIndex2]; // Update to use your color scheme correctly
+                return schemes[0].colors[colorIndex1 * 3 + colorIndex2];
             })
-            .attr('stroke', 'black')
-            .attr('stroke-width', 1)
-            .on('click', d => {
+           .attr('stroke', 'black')
+           .attr('stroke-width', 1)
+           .on('click', d => {
                 const infoPanel = document.getElementById('info-panel');
-                
-            
-                // Extract the "Pašvaldība" value safely from the clicked feature's properties.
-                const currentPasvaldiba = d.properties ? d.properties['Pašvaldība'] : undefined;
-            
+                const currentPasvaldiba = d.properties? d.properties['Pašvaldība'] : undefined;
                 if (!currentPasvaldiba) {
                     console.error('Current feature does not have a "Pašvaldība" property.');
                     infoPanel.innerHTML = `No data available for the selected feature.`;
                     return;
                 }
-            
-                // Find the matching feature in the second dataset safely.
                 const matchingFeature = data2.features.find(feature => feature.properties && feature.properties['Pašvaldība'] === currentPasvaldiba);
-            
-                // Safely extract the value for the selected year from the clicked feature and the matching feature.
-                const value1 = d.properties && d.properties[selectedYear] ? d.properties[selectedYear] : 'Data Not Available';
-                const value2 = matchingFeature && matchingFeature.properties && matchingFeature.properties[selectedYear] ? matchingFeature.properties[selectedYear] : 'Data Not Available';
-            
-                // Display the values in the info panel.
+                const value1 = d.properties && d.properties[selectedYear]? d.properties[selectedYear] : 'Data Not Available';
+                const value2 = matchingFeature && matchingFeature.properties && matchingFeature.properties[selectedYear]? matchingFeature.properties[selectedYear] : 'Data Not Available';
                 infoPanel.innerHTML = `Value 1: ${value1}<br>Value 2: ${value2}`;
             });
-
+  
         // Assuming the legend is only needed once, or checking if it needs to be updated
         if(d3.select('#legend-container svg').empty()) {
-            createBivariateLegend(legendSvg, selectedScheme, labelsX, labelsY)
+            createBivariateLegend(legendSvg, schemes[0].colors);
         }
     });
-}
+  }
 
 
-function createBivariateLegend(svg, colorScheme, ) {
-    const n = colorScheme.length; // Assuming square matrix for simplicity
+  function createBivariateLegend(svg, colorSchemeX, colorSchemeY) {
+    const nX = colorSchemeX.length;
+    const nY = colorSchemeY.length;
     const k = 24; // Size of each square in the legend
-    
+  
     // Define arrow marker for the axes
     svg.append('defs').append('marker')
-        .attr('id', 'arrowhead')
-        .attr('markerWidth', 10)
-        .attr('markerHeight', 10)
-        .attr('refX', 6)
-        .attr('refY', 3)
-        .attr('orient', 'auto')
-        .append('path')
-        .attr('d', 'M0,0L9,3L0,6Z');
-
+      .attr('id', 'arrowhead')
+      .attr('markerWidth', 10)
+      .attr('markerHeight', 10)
+      .attr('refX', 6)
+      .attr('refY', 3)
+      .attr('orient', 'auto')
+      .append('path')
+      .attr('d', 'M0,0L9,3L0,6Z');
+  
     // Group for the legend
     const legend = svg.append('g')
-        .attr('font-family', 'sans-serif')
-        .attr('font-size', 10)
-        .attr('transform', `translate(50, 50)`); // Adjust as needed
-
-    // Add the squares
-    for (let i = 0; i < n; i++) {
-        for (let j = 0; j < n; j++) {
-            legend.append('rect')
-                .attr('width', k)
-                .attr('height', k)
-                .attr('x', i * k)
-                .attr('y', j * k)
-                .attr('fill', colorScheme[j][i])
-                .append('title').text(`X: 1. dropdowns, Y: 2. dropdowns`);
-        }
+      .attr('font-family', 'sans-serif')
+      .attr('font-size', 10)
+      .attr('transform', `translate(50, 50)`); // Adjust as needed
+  
+    // Add the squares for X variable
+    for (let i = 0; i < nX; i++) {
+      legend.append('rect')
+        .attr('width', k)
+        .attr('height', nY * k)
+        .attr('x', i * k)
+        .attr('y', 0)
+        .attr('fill', colorSchemeX[i])
+        .append('title').text(`X: ${i}`);
     }
-
+  
+    // Add the squares for Y variable
+    for (let j = 0; j < nY; j++) {
+      legend.append('rect')
+        .attr('width', nX * k)
+        .attr('height', k)
+        .attr('x', 0)
+        .attr('y', j * k)
+        .attr('fill', colorSchemeY[j])
+        .append('title').text(`Y: ${j}`);
+    }
+  
     // Add axes
     legend.append('line')
-        .attr('x2', n * k)
-        .attr('y2', n * k)
-        .attr('marker-end', 'url(#arrowhead)')
-        .attr('stroke', 'black')
-        .attr('stroke-width', 1.5);
-
+      .attr('x2', nX * k)
+      .attr('y2', nY * k)
+      .attr('marker-end', 'url(#arrowhead)')
+      .attr('stroke', 'black')
+      .attr('stroke-width', 1.5);
+  
     legend.append('line')
-        .attr('x2', 0)
-        .attr('y2', n * k)
-        .attr('y1', 0)
-        .attr('marker-end', 'url(#arrowhead)')
-        .attr('stroke', 'black')
-        .attr('stroke-width', 1.5);
-
+      .attr('x2', 0)
+      .attr('y2', nY * k)
+      .attr('y1', 0)
+      .attr('marker-end', 'url(#arrowhead)')
+      .attr('stroke', 'black')
+      .attr('stroke-width', 1.5);
+  
     // Add axis labels
     legend.append('text')
-        .attr('font-weight', 'bold')
-        .attr('dy', '0.71em')
-        .attr('transform', `rotate(-90) translate(${-n * k / 2},-10)`)
-        .attr('text-anchor', 'middle')
-        .text('Y Variable');
-
+      .attr('font-weight', 'bold')
+      .attr('dy', '0.71em')
+      .attr('transform', `rotate(-90) translate(${-nX * k / 2},-10)`)
+      .attr('text-anchor', 'middle')
+      .text('Y Variable');
+  
     legend.append('text')
-        .attr('font-weight', 'bold')
-        .attr('dy', '0.71em')
-        .attr('transform', `translate(${n * k / 2},${n * k + 20})`)
-        .attr('text-anchor', 'middle')
-        .text('X Variable');
-}
+      .attr('font-weight', 'bold')
+      .attr('dy', '0.71em')
+      .attr('transform', `translate(${(nX + 1) * k / 2},${(nY + 1) * k + 20})`)
+      .attr('text-anchor', 'middle')
+      .text('X Variable');
+  }
 
 function getBivariateColor(value1, value2, minValue1, maxValue1, minValue2, maxValue2) {
     // Determine the quantiles for both values
@@ -481,15 +472,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const initialYear = availableYears[0]; // Default to first available year
     const initialSheet = sheetSelect.value; // Default to first sheet if you have a default selection
     yearSelect.value = initialYear; // Set default year in selector
+    const infoPanel = document.getElementById('info-panel');
     // Call this function when your page loads or when you receive the available years from the backend
     populateYearSelector(availableYears);
    
     // Define the size of the map
     
     populateXlsxFileSelect();
-    updateD3Map(initialSheet, initialYear);
-
-    
+    updateD3Map(initialSheet, initialYear);   
 
     
 
@@ -637,55 +627,6 @@ function updateMapWithSelectedSheets() {
     });
 }
 
-
-
-document.getElementById('sheet-select1').addEventListener('change', function () {
-    var selectedSheet = this.value;
-    const mapid = mymapArray[0];
-    var selectedYear = document.getElementById('year-select').value;
-    //fetchAndDisplayDataForHeatmap(selectedSheet,document.getElementById('year-select').value);
-    var url = `/sheet_data/${encodeURIComponent(selectedSheet)}?year=${encodeURIComponent(selectedYear)}`;
-    
-    //fetchAndCreateChoropleth(url, mapid);
-    //updateD3Map(selectedSheet, selectedYear);
-
-
-
-});
-document.getElementById('sheet-select2').addEventListener('change', function () {
-    var selectedSheet = this.value;
-    var selectedYear = document.getElementById('year-select').value;
-    const mapid = mymapArray[1];
-
-    //fetchAndDisplayDataForHeatmap(selectedSheet,document.getElementById('year-select').value);
-    var url = `/sheet_data/${encodeURIComponent(selectedSheet)}?year=${encodeURIComponent(selectedYear)}`;
-    //fetchAndCreateChoropleth(url, mapid);
-
-
-
-});
-document.getElementById('sheet-select3').addEventListener('change', function () {
-    var selectedSheet = this.value;
-    var selectedYear = document.getElementById('year-select').value;
-    const mapid = mymapArray[2];
-    //fetchAndDisplayDataForHeatmap(selectedSheet,document.getElementById('year-select').value);
-    var url = `/sheet_data/${encodeURIComponent(selectedSheet)}?year=${encodeURIComponent(selectedYear)}`;
-    //fetchAndCreateChoropleth(url, mapid);
-
-
-
-});
-document.getElementById('sheet-select4').addEventListener('change', function () {
-    var selectedSheet = this.value;
-    var selectedYear = document.getElementById('year-select').value;
-    const mapid = mymapArray[3];
-    //fetchAndDisplayDataForHeatmap(selectedSheet,document.getElementById('year-select').value);
-    var url = `/sheet_data/${encodeURIComponent(selectedSheet)}?year=${encodeURIComponent(selectedYear)}`;
-    //fetchAndCreateChoropleth(url, mapid);
-
-
-
-});
 async function updateMaps(visualizationType) {
     const selectedYear = document.getElementById('year-select').value;
     let j=1;
@@ -727,7 +668,6 @@ async function updateMaps(visualizationType) {
         j++;
     }
 }
-
 
 function createLegend(quantiles1, quantiles2, colorScheme) {
     const svg = d3.select('#legend-container').html("").append('svg')
@@ -774,8 +714,7 @@ function createLegend(quantiles1, quantiles2, colorScheme) {
         .attr('y', -10)
         .style('font-weight', 'bold')
         .text('Bivariate Color Legend');
-  }
-
+}
 // Function to fetch GeoJSON data
 async function fetchGeoJSON(url) {
     try {
