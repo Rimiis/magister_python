@@ -20,6 +20,7 @@ mymapArray.push(mymap1);
 mymapArray.push(mymap2);
 mymapArray.push(mymap3);
 mymapArray.push(mymap4);
+var all_data = {};
 const svg = d3.select('#d3-container'); // Select your SVG container
 schemes = [
     {
@@ -61,7 +62,7 @@ var heatmapLayer;
 var lastClickedLayer = null;
 var currentGeoJSONLayer = null;
 const availableYears = ['2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023'];
-const width = 960, height = 600;
+const width = 1100, height = 700;
 
 
 function addLegend(map, colors, values) {
@@ -93,6 +94,80 @@ function addLegend(map, colors, values) {
     legend.addTo(map);
     map.legend = legend; // Store reference to the legend
 }
+function createBivariateLegend() {
+    const selectedFile = document.getElementById('xlsx-file-select').value; // Use the selected file's name
+    const sheetNameX = document.getElementById('sheet-select1').value; // Sheet for x-axis
+    const sheetNameY = document.getElementById('sheet-select2').value; // Sheet for y-axis
+
+    const svgWidth = 350; // Increased width to accommodate labels
+    const svgHeight = 150; // Increased height for label placement
+    const cellSize = 30; // Size of each color cell
+    const margin = { top: 20, right: 10, bottom: 60, left: 80 }; // Adjusted margins for labels
+
+    // Create SVG container for the legend
+    const svg = d3.select('#legend-container').html("").append('svg')
+        .attr('width', svgWidth)
+        .attr('height', svgHeight)
+        .style('font', '10px sans-serif');
+
+    // Color scheme setup
+    const rdBuScheme = schemes.find(scheme => scheme.name === "RdBu") || schemes[0];
+    const colors = rdBuScheme.colors;
+    const colorMatrix = [
+        colors.slice(6, 9),
+        colors.slice(3, 6),
+        colors.slice(0, 3)
+    ];
+
+    // Draw the color cells
+    colorMatrix.forEach((rowColors, i) => {
+        rowColors.forEach((color, j) => {
+            svg.append('rect')
+                .attr('x', margin.left + j * cellSize)
+                .attr('y', margin.top + i * cellSize)
+                .attr('width', cellSize)
+                .attr('height', cellSize)
+                .style('fill', color);
+        });
+    });
+
+    // Add x-axis label
+
+    // Add x-axis label above the color matrix
+    svg.append('text')
+        .attr('x', margin.left + cellSize * 1.5) // Centered over the color matrix
+        .attr('y', margin.top + (3 * cellSize) + 20) // Positioned below the color matrix; adjust the '20' as needed
+        .style('text-anchor', 'middle')
+        .style('font-weight', 'bold')
+        .text(sheetNameX); // Use the selected sheet name for x-axis
+
+    // Add y-axis label
+    svg.append('text')
+        .attr('transform', `translate(${margin.left / 3}, ${margin.top + cellSize * 1.5})rotate(-90)`)
+        .style('text-anchor', 'middle')
+        .style('font-weight', 'bold')
+        .text(sheetNameY); // Use the selected sheet name for y-axis
+
+    // Add axis lines
+    // X-axis line
+    svg.append('line')
+        .attr('x1', margin.left)
+        .attr('y1', margin.top + cellSize * 3)
+        .attr('x2', margin.left + cellSize * 3)
+        .attr('y2', margin.top + cellSize * 3)
+        .style('stroke', 'black')
+        .style('stroke-width', 1);
+
+    // Y-axis line
+    svg.append('line')
+        .attr('x1', margin.left)
+        .attr('y1', margin.top)
+        .attr('x2', margin.left)
+        .attr('y2', margin.top + cellSize * 3)
+        .style('stroke', 'black')
+        .style('stroke-width', 1);
+}
+
 function generateLegendColors(minValue, maxValue) {
     const sampleValues = [];
     const negativeSteps = 4; // Number of steps for negative values, adjust as needed
@@ -140,82 +215,65 @@ var highlightStyle = {
 };
 //variables
 
-function fetchAndCreateChoropleth(url, mapid) {
-    // Adjusting addLegend function call to use generated sample values and colors
-    
-    fetch(url)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.json();
-        })
-        .then(geojsonData => {
+function fetchAndCreateChoropleth(filename, sheetName, mapid) {
+    // Check if data exists for the given filename and sheetName
+    if (!all_data[filename] || !all_data[filename][sheetName]) {
+        console.error(`Data for sheet ${sheetName} in file ${filename} not found in all_data`);
+        return;
+    }
+    const geojsonData = all_data[filename][sheetName];
+
+    let minValue = Infinity;
+    let maxValue = -Infinity;
+
+    // Calculate min and max values for the color scale
+    geojsonData.features.forEach(feature => {
+        const value = parseFloat(feature.properties[document.getElementById('year-select').value]);
+        if (!isNaN(value)) {
+            minValue = Math.min(minValue, value);
+            maxValue = Math.max(maxValue, value);
+        }
+    });
+
+    // Create a choropleth layer
+    mapid.choroplethLayer = L.geoJson(geojsonData, {
+        style: feature => {
+            return {
+                fillColor: getColor(feature.properties[document.getElementById('year-select').value], minValue, maxValue),
+                weight: 2,
+                opacity: 0.2,
+                color: 'white',
+                dashArray: '3',
+                fillOpacity: 0.7
+            };
+        },
+        onEachFeature: function (feature, layer) {
+            layer.on('click', function (e) {
+              // Reset style of the previously clicked layer
+              if (lastClickedLayer && lastClickedLayer !== layer) {
+                lastClickedLayer.setStyle({
+                  fillColor: getColor(feature.properties[document.getElementById('year-select').value], minValue, maxValue),
+                  // ... other style properties
+                });
+              }
           
-            
-            let minValue = Infinity;
-            let maxValue = -Infinity;
-            // Create a choropleth layer using the fetched GeoJSON data
-            mapid.choroplethLayer = L.geoJson(geojsonData, {
-                style: function (feature) {
+              // Set the style of the currently clicked layer
+              e.target.setStyle(highlightStyle);
+          
+              // Update the lastClickedLayer reference
+              lastClickedLayer = e.target;
+          
+              // Assuming updateDataTable is defined and updates UI with feature properties
+              updateDataTable(feature.properties);
+            });
+          
+            // Optional: Define logic for binding tooltips based on feature properties
+            layer.bindTooltip(feature.properties['Pašvaldība'] || 'No name', { permanent: false, direction: 'auto' });
+          }
+    }).addTo(mapid);
 
-                    geojsonData.features.forEach(feature => {
-                        const value = parseFloat(feature.properties[document.getElementById('year-select').value]);
-                        if (!isNaN(value)) {
-                            minValue = Math.min(minValue, value);
-                            maxValue = Math.max(maxValue, value);
-                        }
-
-
-
-                    });
-
-
-                    return {
-                        fillColor: getColor(feature.properties[document.getElementById('year-select').value], minValue, maxValue),
-                        weight: 2,
-                        opacity: 0.2,
-                        label: `heatmap for ${selectedSheet}`,
-                        color: 'white',
-                        dashArray: '3',
-                        fillOpacity: 0.7
-                    };
-
-                },
-                onEachFeature: function (feature, choroplethLayer) {
-                    choroplethLayer.on('click', function (e) {
-                        if (lastClickedLayer) lastClickedLayer.setStyle(defaultHighlightstyle);
-                        e.target.setStyle(defaultHighlightstyle);
-                        lastClickedLayer = e.target;
-                        var props = e.target.feature.properties;
-                        // Assuming you have a function to update the dataTable based on the clicked feature
-                        updateDataTable(props);
-
-                    });
-                    if (feature.properties && feature.properties['Pašvaldība']) {
-                        choroplethLayer.bindTooltip(feature.properties['Pašvaldība'], {
-                            permanent: false,
-                            direction: 'auto'
-                        });
-
-                    }
-                    if (feature.properties && feature.properties['Teritoriālais iedalījums']) {
-                        choroplethLayer.bindTooltip(feature.properties['Teritoriālais iedalījums'], {
-                            permanent: false, // Set to true if you want the labels to always be visible
-                            direction: 'auto'
-                        });
-                    }
-                }
-                
-
-            }).addTo(mapid);
-
-            const { sampleValues, sampleColors } = generateLegendColors(minValue, maxValue);
-            addLegend(mapid, sampleColors, sampleValues);
-            
-
-        })
-        .catch(error => console.error('Error fetching sheet data:', error));
+    const { sampleValues, sampleColors } = generateLegendColors(minValue, maxValue);
+    addLegend(mapid, sampleColors, sampleValues);
 }
 
 
@@ -234,211 +292,120 @@ function populateYearSelector(years) {
 const yearSelect = document.getElementById('year-select');
 const sheetSelect = document.getElementById('sheet-select1');
 
-function updateD3Map(sheetName, selectedYear) {
-    const url = `/sheet_data/${encodeURIComponent(sheetName)}?year=${encodeURIComponent(selectedYear)}`;
-
-    fetch(url)
-        .then(response => response.json())
-        .then(geojsonData => {
-            const svg = d3.select('#d3-container svg');
-            const projection = d3.geoMercator().center([24.1052, 56.9496]).scale(7000).translate([svg.attr('width') / 2, svg.attr('height') / 2]);
-            const path = d3.geoPath().projection(projection);
-            const value = document.getElementById('year-select').value;
-            
-            svg.selectAll('path').remove();
-            svg.selectAll('path')
-                .data(geojsonData.features)
-                .enter().append('path')
-                .attr('d', path)
-                .attr('fill', function(d) {
-                    
-                    
-                    return getColor(d.properties[`${value}`], minValue, maxValue);
-                });
-        })
-        .catch(error => console.error('Error updating D3 map:', error));
-}
-
-document.getElementById('xlsx-file-select').addEventListener('change', function() {
-    const selectedFile = this.value;
-    
-    fetchSheetsForFile(selectedFile);
-
-});
-async function fetchAllSheetData() {
-    const sheetNames = Object.keys(sheetsData); // Assuming you know sheet names ahead of time or have fetched them already
-    try {
-      const fetchPromises = sheetNames.map(sheetName => fetch(`/sheet_data/${sheetName}`).then(response => response.json()));
-      const results = await Promise.all(fetchPromises);
-      results.forEach((data, index) => {
-        const sheetName = sheetNames[index];
-        sheetsData[sheetName] = data; // Populate the sheetsData object with fetched data
-      });
-      console.log('All sheet data loaded:', sheetsData);
-    } catch (error) {
-      console.error('Error fetching sheet data:', error);
-    }
-  }
-fetchAllSheetData();
-
 function fetchSheetsForFile(filename) {
-    // Ensure filename is URL encoded to handle special characters
-    fetch(`/sheets/${encodeURIComponent(filename)}`).then(response => response.json()).then(data => {
-        // Assuming the same structure as before to update dropdowns
-        const selects = ['sheet-select1', 'sheet-select2', 'sheet-select3', 'sheet-select4'];
-        selects.forEach(selectId => {
-            const select = document.getElementById(selectId);
-            select.innerHTML = ''; // Clear existing options
-            // Add a default or prompt option
-            
-            data.sheets.forEach(sheet => {
-                const option = new Option(sheet, sheet);
-                
-                select.add(option);
-            });
+    if (!all_data[filename]) {
+        console.error(`Data for file ${filename} not found in all_data`);
+        return;
+    }
+
+    const fileData = all_data[filename];
+    const sheets = Object.keys(fileData);
+
+    // Wait for all sheet data to be loaded
+    Promise.all(sheets.map(sheet => fileData[sheet]));
+
+    // Now that all data is confirmed to be loaded, populate the selects
+    const selects = ['sheet-select1', 'sheet-select2', 'sheet-select3', 'sheet-select4'];
+    selects.forEach(selectId => {
+        const select = document.getElementById(selectId);
+        select.innerHTML = ''; // Clear existing options
+
+        sheets.forEach(sheet => {
+            const option = new Option(sheet, sheet);
+            select.add(option);
         });
-    }).catch(error => console.error('Error fetching sheets:', error));
+    });
 }
 
-document.getElementById('xlsx-file-select').addEventListener('change', function() {
+document.getElementById('xlsx-file-select').addEventListener('change', async function() {
     const selectedFile = this.value;
-    if(selectedFile) {
+    if (selectedFile) {
         fetchSheetsForFile(selectedFile);
     }
 });
+// Function to show the loading overlay
+function showLoadingOverlay() {
+    document.getElementById('loadingOverlay').style.display = 'flex'; // Use 'flex' to activate flexbox alignment
+}
+
+// Function to hide the loading overlay
+function hideLoadingOverlay() {
+    document.getElementById('loadingOverlay').style.display = 'none';
+}
 
 
 function updateBivariateChoroplethMap() {
+    const selectedFile = document.getElementById('xlsx-file-select').value; // Retrieve the currently selected filename
     const sheetName1 = document.getElementById('sheet-select1').value;
     const sheetName2 = document.getElementById('sheet-select2').value;
     const selectedYear = document.getElementById('year-select').value;
-    const legendSvg = d3.select('#legend-container').html("").append('svg')
-               .attr('width', 300)
-               .attr('height', 300);
-    Promise.all([
-        fetch(`/sheet_data/${encodeURIComponent(sheetName1)}?year=${encodeURIComponent(selectedYear)}`).then(res => res.json()),
-        fetch(`/sheet_data/${encodeURIComponent(sheetName2)}?year=${encodeURIComponent(selectedYear)}`).then(res => res.json())
-    ])
-   .then(([data1, data2]) => {
-        const quantiles1 = calculateQuantiles(data1.features, selectedYear);
-        const quantiles2 = calculateQuantiles(data2.features, selectedYear);
-  
-        const svg = d3.select('#d3-container').html("").append('svg')
-           .attr('width', width)
-           .attr('height', height);
-  
-        const path = d3.geoPath().projection(projection);
-        svg.selectAll('path')
-           .data(data1.features)
-           .enter().append('path')
-           .attr('d', path)
-           .attr('fill', d => {
+
+    // First, ensure that the file's data is loaded into all_data
+    if (!all_data[selectedFile]) {
+        console.error(`Data for file ${selectedFile} not found in all_data`);
+        return;
+    }
+
+    // Next, ensure that both sheets have data loaded for the selected file
+    const fileData = all_data[selectedFile]; // Access the data for the selected file
+    if (!fileData[sheetName1] || !fileData[sheetName2]) {
+        console.error(`Data for one or both sheets (${sheetName1}, ${sheetName2}) not found in file ${selectedFile} within all_data`);
+        return;
+    }
+
+    const data1 = fileData[sheetName1];
+    const data2 = fileData[sheetName2];
+
+    // Proceed with the original logic, now using data1 and data2 which are correctly referenced
+    const quantiles1 = calculateQuantiles(data1.features, selectedYear);
+    const quantiles2 = calculateQuantiles(data2.features, selectedYear);
+
+    const svg = d3.select('#d3-container').html("").append('svg')
+        .attr('width', width)
+        .attr('height', height);
+
+    const path = d3.geoPath().projection(projection);
+    svg.selectAll('path')
+        .data(data1.features)
+        .enter().append('path')
+        .attr('d', path)
+        .attr('fill', d => {
+            const value1 = parseFloat(d.properties[selectedYear]) || 0;
+            const matchingFeature = data2.features.find(f => f.properties.Pašvaldība === d.properties.Pašvaldība);
+            const value2 = matchingFeature ? parseFloat(matchingFeature.properties[selectedYear]) || 0 : 0;
+            const colorIndex1 = determineColorIndex(value1, quantiles1);
+            const colorIndex2 = determineColorIndex(value2, quantiles2);
+            
+            return schemes[0].colors[colorIndex1 * 3 + colorIndex2];
+        })
+        .attr('stroke', 'black')
+        .attr('stroke-width', 1)
+        .on('click', d => {
+            // Find the matching feature from the second dataset
+            const matchingFeature = data2.features.find(f => f.properties.Pašvaldība === d.properties.Pašvaldība);
+        
+            // Check if matchingFeature exists before attempting to access its properties
+            if (matchingFeature && d.properties) {
+                // Get the values from both datasets
                 const value1 = parseFloat(d.properties[selectedYear]) || 0;
-                const matchingFeature = data2.features.find(f => f.properties.Pašvaldība === d.properties.Pašvaldība);
-                const value2 = matchingFeature? parseFloat(matchingFeature.properties[selectedYear]) || 0 : 0;
-                const colorIndex1 = determineColorIndex(value1, quantiles1);
-                const colorIndex2 = determineColorIndex(value2, quantiles2);
-                return schemes[0].colors[colorIndex1 * 3 + colorIndex2];
-            })
-           .attr('stroke', 'black')
-           .attr('stroke-width', 1)
-           .on('click', d => {
-                const infoPanel = document.getElementById('info-panel');
-                const currentPasvaldiba = d.properties? d.properties['Pašvaldība'] : undefined;
-                if (!currentPasvaldiba) {
-                    console.error('Current feature does not have a "Pašvaldība" property.');
-                    infoPanel.innerHTML = `No data available for the selected feature.`;
-                    return;
-                }
-                const matchingFeature = data2.features.find(feature => feature.properties && feature.properties['Pašvaldība'] === currentPasvaldiba);
-                const value1 = d.properties && d.properties[selectedYear]? d.properties[selectedYear] : 'Data Not Available';
-                const value2 = matchingFeature && matchingFeature.properties && matchingFeature.properties[selectedYear]? matchingFeature.properties[selectedYear] : 'Data Not Available';
-                infoPanel.innerHTML = `Value 1: ${value1}<br>Value 2: ${value2}`;
-            });
-  
-        // Assuming the legend is only needed once, or checking if it needs to be updated
-        if(d3.select('#legend-container svg').empty()) {
-            createBivariateLegend(legendSvg, schemes[0].colors);
-        }
-    });
-  }
+                const value2 = parseFloat(matchingFeature.properties[selectedYear]) || 0;
+        
+                // Display the values
+                const infoDiv = document.getElementById('info');
+                infoDiv.innerHTML = `
+                    <strong>${d.properties.Pašvaldība}</strong><br>
+                    Value 1: ${value1.toFixed(2)}<br>
+                    Value 2: ${value2.toFixed(2)}
+                `;
+            } else {
+                // Handle the case where no matching feature is found or properties are undefined
+                console.error('Matching feature or properties are undefined.');
+            }
+        });
 
-
-  function createBivariateLegend(svg, colorSchemeX, colorSchemeY) {
-    const nX = colorSchemeX.length;
-    const nY = colorSchemeY.length;
-    const k = 24; // Size of each square in the legend
-  
-    // Define arrow marker for the axes
-    svg.append('defs').append('marker')
-      .attr('id', 'arrowhead')
-      .attr('markerWidth', 10)
-      .attr('markerHeight', 10)
-      .attr('refX', 6)
-      .attr('refY', 3)
-      .attr('orient', 'auto')
-      .append('path')
-      .attr('d', 'M0,0L9,3L0,6Z');
-  
-    // Group for the legend
-    const legend = svg.append('g')
-      .attr('font-family', 'sans-serif')
-      .attr('font-size', 10)
-      .attr('transform', `translate(50, 50)`); // Adjust as needed
-  
-    // Add the squares for X variable
-    for (let i = 0; i < nX; i++) {
-      legend.append('rect')
-        .attr('width', k)
-        .attr('height', nY * k)
-        .attr('x', i * k)
-        .attr('y', 0)
-        .attr('fill', colorSchemeX[i])
-        .append('title').text(`X: ${i}`);
-    }
-  
-    // Add the squares for Y variable
-    for (let j = 0; j < nY; j++) {
-      legend.append('rect')
-        .attr('width', nX * k)
-        .attr('height', k)
-        .attr('x', 0)
-        .attr('y', j * k)
-        .attr('fill', colorSchemeY[j])
-        .append('title').text(`Y: ${j}`);
-    }
-  
-    // Add axes
-    legend.append('line')
-      .attr('x2', nX * k)
-      .attr('y2', nY * k)
-      .attr('marker-end', 'url(#arrowhead)')
-      .attr('stroke', 'black')
-      .attr('stroke-width', 1.5);
-  
-    legend.append('line')
-      .attr('x2', 0)
-      .attr('y2', nY * k)
-      .attr('y1', 0)
-      .attr('marker-end', 'url(#arrowhead)')
-      .attr('stroke', 'black')
-      .attr('stroke-width', 1.5);
-  
-    // Add axis labels
-    legend.append('text')
-      .attr('font-weight', 'bold')
-      .attr('dy', '0.71em')
-      .attr('transform', `rotate(-90) translate(${-nX * k / 2},-10)`)
-      .attr('text-anchor', 'middle')
-      .text('Y Variable');
-  
-    legend.append('text')
-      .attr('font-weight', 'bold')
-      .attr('dy', '0.71em')
-      .attr('transform', `translate(${(nX + 1) * k / 2},${(nY + 1) * k + 20})`)
-      .attr('text-anchor', 'middle')
-      .text('X Variable');
-  }
+    // Update or create the legend for the bivariate choropleth map, as before
+    createBivariateLegend();
+}
 
 function getBivariateColor(value1, value2, minValue1, maxValue1, minValue2, maxValue2) {
     // Determine the quantiles for both values
@@ -469,21 +436,53 @@ function determineColorIndex(value, quantiles) {
 
 // Initially load map with default values
 document.addEventListener('DOMContentLoaded', () => {
+    
+    fetchAllSheetsData();
     const initialYear = availableYears[0]; // Default to first available year
     const initialSheet = sheetSelect.value; // Default to first sheet if you have a default selection
     yearSelect.value = initialYear; // Set default year in selector
     const infoPanel = document.getElementById('info-panel');
+    
     // Call this function when your page loads or when you receive the available years from the backend
     populateYearSelector(availableYears);
    
     // Define the size of the map
     
     populateXlsxFileSelect();
-    updateD3Map(initialSheet, initialYear);   
+  
 
     
 
 });
+var excelDataStore = {}; // Global object to store fetched data
+async function fetchAllSheetsData() {
+    try {
+        // Assuming "/list-xlsx-files" endpoint lists all Excel files in the /uploads folder
+        const fileListResponse = await fetch('/list-xlsx-files');
+        const fileList = await fileListResponse.json();
+        
+        for (const filename of fileList) {
+            // Assuming "/sheets/{filename}" endpoint returns all sheets in the specified Excel file
+            const sheetsResponse = await fetch(`/sheets/${encodeURIComponent(filename)}`);
+            const sheetsData = await sheetsResponse.json();
+            
+            if (!sheetsData.sheets) continue; // Skip if no sheets data
+            
+            for (const sheetName of sheetsData.sheets) {
+                // Assuming "/sheet_data/{filename}/{sheetName}" endpoint returns data for the specified sheet
+                const sheetDataResponse = await fetch(`/sheet_data/${encodeURIComponent(sheetName)}`);
+                if (!sheetDataResponse.ok) continue; // Skip on error
+                
+                const sheetData = await sheetDataResponse.json();
+                if (!all_data[filename]) all_data[filename] = {};
+                all_data[filename][sheetName] = sheetData;
+            }
+        }
+    } catch (error) {
+        console.error('Error fetching or processing sheet data:', error);
+    }
+}
+
 
 function getColor(value, minValue, maxValue) {
     // Ensure the value is a number.
@@ -619,102 +618,119 @@ var defaultHighlightstyle = {
 };
 
 
-// Function to update map layers based on selected sheets
-function updateMapWithSelectedSheets() {
-    ['sheet-select1', 'sheet-select2', 'sheet-select3', 'sheet-select4'].forEach(selectId => {
-        var sheetName = document.getElementById(selectId).value;
-        fetchAndCreateChoroplethLayerForSheet(sheetName);
-    });
-}
 
-async function updateMaps(visualizationType) {
+
+function updateMaps(visualizationType) {
     const selectedYear = document.getElementById('year-select').value;
-    let j=1;
+    // Retrieve the currently selected file name
+    const selectedFile = document.getElementById('xlsx-file-select').value;
+
     // Loop through each map in your array
     for (let i = 0; i < mymapArray.length; i++) {
         const map = mymapArray[i];
-        
-         // Assumes sheet-select IDs are sequentially named
-        const selectedSheet = document.getElementById(`sheet-select${j.toString()}`).value;
-        
-        const geojsonUrl = `/sheet_data/${encodeURIComponent(selectedSheet)}?year=${encodeURIComponent(selectedYear)}`;
 
-       
+        // Assumes sheet-select IDs are sequentially named
+        const selectedSheet = document.getElementById(`sheet-select${(i + 1).toString()}`).value;
 
-        // Fetch GeoJSON data once and use it for the selected visualization
-        const geojsonData = await fetchGeoJSON(geojsonUrl);
+        // Retrieve GeoJSON data directly from all_data using both the selected file and sheet names
+        const fileData = all_data[selectedFile]; // Retrieve data for the selected file
+        if (!fileData) {
+            console.error(`Data for file ${selectedFile} not found in all_data`);
+            continue;
+        }
+
+        const geojsonData = fileData[selectedSheet]; // Retrieve sheet data from the selected file
         if (!geojsonData) {
-            console.log("No data available for", selectedSheet, "in", selectedYear);
-            continue; // Skip to the next map if no data
+            console.error(`Data for sheet ${selectedSheet} not found in ${selectedFile} within all_data`);
+            continue; // Skip to the next map if no data is available for the selected sheet
         }
 
         // Based on the visualizationType, create the corresponding layer on the map
         switch (visualizationType) {
             case 'choropleth':
-                fetchAndCreateChoropleth(geojsonUrl,map);
+                // Assuming fetchAndCreateChoropleth is now adapted to work directly with geojsonData
+                fetchAndCreateChoropleth(selectedFile,selectedSheet, map);
                 break;
             case 'heatmap':
-                createHeatmapLayer(map, geojsonData);
+                // If createHeatmapLayer can work directly with geojsonData then just call it, else adapt it
+                createHeatmapLayer(map, selectedFile ,selectedSheet, selectedYear);
                 break;
             case 'dotmap':
-                createDotMapLayer(map, geojsonData);
+                // createDotMapLayer now just needs the map and the sheet name as it will look up data in all_data
+                createDotMapLayer(selectedFile, selectedSheet, map);
                 break;
             case 'bivariate':
+                // This case might need to handle two different sets of data if it’s comparing two sheets
                 updateBivariateChoroplethMap();
                 break;
             default:
                 console.error("Unsupported visualization type:", visualizationType);
         }
-        j++;
     }
 }
-
 function createLegend(quantiles1, quantiles2, colorScheme) {
+    // Increased width and height for better layout
+    const svgWidth = 200;
+    const svgHeight = 200;
+  
+    // Create the SVG container
     const svg = d3.select('#legend-container').html("").append('svg')
-        .attr('width', 400)
-        .attr('height', 200)
+        .attr('width', svgWidth)
+        .attr('height', svgHeight)
         .style('font', '10px sans-serif');
   
-    // Assuming colorScheme is a 3x3 matrix for the bivariate color scale
-    const cellSize = 20; // Size of each cell in the legend
+    // Define the size of each cell and the margins
+    const cellSize = 20;
+    const margin = {
+      top: 10,
+      right: 10,
+      bottom: 30, // Space for horizontal labels
+      left: 80   // Increased left margin for vertical labels
+    };
+  
+    // Draw the color cells based on the color scheme
     colorScheme.forEach((rowColors, i) => {
       rowColors.forEach((color, j) => {
         svg.append('rect')
-            .attr('x', j * cellSize)
-            .attr('y', i * cellSize)
+            .attr('x', margin.left + j * cellSize)
+            .attr('y', margin.top + i * cellSize)
             .attr('width', cellSize)
             .attr('height', cellSize)
             .style('fill', color);
       });
     });
   
-    // Add labels for quantiles
-    // Horizontal labels
+    // Add horizontal labels (quantiles for x-axis)
     svg.selectAll('.quantile-labels-h')
         .data(quantiles1)
         .enter().append('text')
         .attr('class', 'quantile-labels-h')
-        .attr('x', (d, i) => (i + 1) * cellSize - (cellSize / 2))
-        .attr('y', cellSize * 3 + 20)
+        .attr('x', d => margin.left + (quantiles1.indexOf(d) + 0.5) * cellSize)
+        .attr('y', margin.top + 3 * cellSize + 20) // Slightly lower to prevent overlap
         .style('text-anchor', 'middle')
+        .style('font-size', '10px')
+        .style('font-family', 'Arial, sans-serif') // A common, readable font-family
+        .style('font-weight', 'normal')
         .text(d => d.toFixed(2));
   
-    // Vertical labels
+    // Add vertical labels (quantiles for y-axis)
     svg.selectAll('.quantile-labels-v')
         .data(quantiles2)
         .enter().append('text')
         .attr('class', 'quantile-labels-v')
-        .attr('transform', (d, i) => `translate(${cellSize * 3 + 10}, ${(i + 1) * cellSize - (cellSize / 2)})rotate(90)`)
+        .attr('transform', (d, i) => `translate(${margin.left - 20}, ${margin.top + (i + 0.5) * cellSize})rotate(-90)`) // Shifted left for clarity
         .style('text-anchor', 'middle')
+        .style('font-size', '10px')
+        .style('font-family', 'Arial, sans-serif')
+        .style('font-weight', 'normal')
         .text(d => d.toFixed(2));
-  
-    // Add legend title or explanation as needed
+    // Add legend title or explanation
     svg.append('text')
-        .attr('x', 0)
-        .attr('y', -10)
+        .attr('x', margin.left + (3 * cellSize) / 2)
+        .attr('y', margin.top / 2)
         .style('font-weight', 'bold')
         .text('Bivariate Color Legend');
-}
+  }
 // Function to fetch GeoJSON data
 async function fetchGeoJSON(url) {
     try {
@@ -728,79 +744,54 @@ async function fetchGeoJSON(url) {
         return null;
     }
 }
-async function updateMapVisualization(map, geojsonUrl, visualizationType) {
-    const geojsonData = await fetchGeoJSON(geojsonUrl);
 
-    if (!geojsonData) {
-        
+
+
+function createHeatmapLayer(map, filename, sheetName, selectedYear) {
+    // Ensure the file and sheet's data is available in all_data
+    if (!all_data[filename] || !all_data[filename][sheetName]) {
+        console.error(`Data for sheet ${sheetName} in file ${filename} not found in all_data`);
         return;
     }
 
-    switch (visualizationType) {
-        case 'choropleth':
-            createChoroplethLayer(map, geojsonData);
-            break;
-        case 'heatmap':
-            
-            createHeatmapLayer(map, geojsonData);
-            break;
-        case 'dotmap':
-            createDotMapLayer(map, geojsonData);
-            break;
-        default:
-            console.log("Unknown visualization type:", visualizationType);
-    }
-}
-document.getElementById('visualizationType').addEventListener('change', function() {
-    const selectedType = this.value;
-   
-    // Update the map based on the selected visualization type
-    updateMaps(selectedType);
-});
+    // Retrieve the GeoJSON data for the specified sheet within the selected file
+    const geojsonData = all_data[filename][sheetName];
 
-function createHeatmapLayer(map, geojsonData, selectedYear) {
-    // Retrieve the selected year from the dropdown
-    //const selectedYear = document.getElementById('year-select').value;
-    
-    // Initialize an empty array for heatmap points
     const heatmapPoints = [];
-
     // Process each feature in the GeoJSON data
     geojsonData.features.forEach(feature => {
-        // Get the value for the selected year from the feature's properties
         const value = parseFloat(feature.properties[selectedYear]);
         let intensity = 1; // Default intensity
         if (!isNaN(value) && value > 0) {
-            // Optionally, scale the intensity value here if needed
-            intensity = Math.log(value); // Using a log scale as an example
+            intensity = Math.log(value); // Example scaling of intensity
         }
 
-        // Calculate the centroid of the polygon
+        // Calculate the centroid of the polygon for correct positioning
         let coords;
         if (feature.geometry.type === 'Polygon' || feature.geometry.type === 'MultiPolygon') {
             const centroid = turf.centroid(feature).geometry.coordinates;
             coords = [centroid[1], centroid[0]]; // Reversed for Leaflet (lat, lng)
         } else {
             console.error('Feature is not a Polygon or MultiPolygon:', feature);
+            return;
         }
 
-        if (coords && coords.length === 2) {
-            heatmapPoints.push([...coords, intensity]); // Append the coords and intensity to the points array
+        if (coords) {
+            heatmapPoints.push([...coords, intensity]);
         }
     });
 
     // Add the heatmap layer to the map if there are points to display
     if (heatmapPoints.length) {
         const heatmapLayer = L.heatLayer(heatmapPoints, {
-            radius: 25, // This can be adjusted or scaled based on zoom level
-            blur: 15, // Adjust for smoother visual
+            radius: 25, // Adjust as needed
+            blur: 15, // Adjust as needed
             maxZoom: 17,
         }).addTo(map);
     } else {
         console.error("No points generated for the heatmap.");
     }
 }
-
 
 // Example normalization function, adjust as needed
 function normalizeIntensity(value, min, max) {
@@ -821,42 +812,45 @@ function getDataRange(geojsonData) {
     return {min, max};
 }
 
-function createDotMapLayer(map, geojsonData) {
-    geojsonData.features.forEach(feature => {
-        let coords = feature.geometry.coordinates;
+function createDotMapLayer(filename, sheetName, map) {
+    // Check if data exists for the given filename and sheetName
+    if (!all_data[filename] || !all_data[filename][sheetName]) {
+        console.error(`Data for sheet ${sheetName} in file ${filename} not found in all_data`);
+        return;
+    }
 
+    const geojsonData = all_data[filename][sheetName];
+
+    // Iterate through the GeoJSON features to create markers
+    geojsonData.features.forEach(feature => {
+        let coords;
+
+        // Determine the feature type and extract coordinates accordingly
         switch (feature.geometry.type) {
             case 'Point':
-                createMarker(map, coords);
+                coords = feature.geometry.coordinates;
+                createMarker(map, [coords[1], coords[0]]); // Leaflet expects [lat, lng]
                 break;
             case 'MultiPoint':
-                coords.forEach(coord => createMarker(map, coord));
+                coords.forEach(coord => createMarker(map, [coord[1], coord[0]]));
                 break;
             case 'Polygon':
-                // For Polygons, placing a marker at the first point of the first LinearRing
-                if (coords[0] && coords[0][0]) createMarker(map, coords[0][0]);
-                break;
             case 'MultiPolygon':
-                let centroid = turf.centroid(feature).geometry.coordinates;
-                createMarker(map, centroid);
+                // For Polygons and MultiPolygons, calculate the centroid and create a marker
+                coords = turf.centroid(feature).geometry.coordinates;
+                createMarker(map, [coords[1], coords[0]]);
                 break;
             default:
-                console.error("Geometry type", feature.geometry.type, "not handled.");
+                console.error(`Geometry type '${feature.geometry.type}' not handled.`);
         }
     });
 }
 
-
-
+// Helper function to create a marker on the map
 function createMarker(map, coords) {
-    if (Array.isArray(coords) && coords.length >= 2) {
-        let lat = coords[1];
-        let lng = coords[0];
-        L.marker([lat, lng]).addTo(map);
-    } else {
-        console.error("Invalid coordinates for marker:", coords);
-    }
+    L.marker(coords).addTo(map);
 }
+
 function calculateRadius(value) {
    
     return Math.sqrt(value) * 2;
@@ -895,10 +889,11 @@ var updateButton = document.getElementById('update-button');
 if (updateButton) { 
     updateButton.addEventListener('click', function () {
         let visualizationType= document.getElementById('visualizationType').value;
-        updateMaps(visualizationType);
-        updateBivariateChoroplethMap();
-        
         clearAllMapLayers(); 
+        updateMaps(visualizationType);
+        updateBivariateChoroplethMap(); 
+        console.log(all_data)
+        
         
     });
 }
