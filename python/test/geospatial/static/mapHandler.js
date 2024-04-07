@@ -455,34 +455,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
 });
 var excelDataStore = {}; // Global object to store fetched data
+function showLoadingOverlay() {
+    document.getElementById('loadingOverlay').style.display = 'flex'; // Use 'flex' to activate flexbox alignment
+}
+
+// Function to hide the loading overlay
+function hideLoadingOverlay() {
+    document.getElementById('loadingOverlay').style.display = 'none';
+}
+
 async function fetchAllSheetsData() {
+    showLoadingOverlay(); // Show loading overlay at the beginning
     try {
-        // Assuming "/list-xlsx-files" endpoint lists all Excel files in the /uploads folder
         const fileListResponse = await fetch('/list-xlsx-files');
         const fileList = await fileListResponse.json();
         
-        for (const filename of fileList) {
-            // Assuming "/sheets/{filename}" endpoint returns all sheets in the specified Excel file
+        await Promise.all(fileList.map(async (filename) => {
             const sheetsResponse = await fetch(`/sheets/${encodeURIComponent(filename)}`);
             const sheetsData = await sheetsResponse.json();
             
-            if (!sheetsData.sheets) continue; // Skip if no sheets data
+            if (!sheetsData.sheets) return; // Skip if no sheets data
             
-            for (const sheetName of sheetsData.sheets) {
-                // Assuming "/sheet_data/{filename}/{sheetName}" endpoint returns data for the specified sheet
+            await Promise.all(sheetsData.sheets.map(async (sheetName) => {
                 const sheetDataResponse = await fetch(`/sheet_data/${encodeURIComponent(sheetName)}`);
-                if (!sheetDataResponse.ok) continue; // Skip on error
+                if (!sheetDataResponse.ok) return; // Skip on error
                 
                 const sheetData = await sheetDataResponse.json();
                 if (!all_data[filename]) all_data[filename] = {};
                 all_data[filename][sheetName] = sheetData;
-            }
-        }
+            }));
+        }));
     } catch (error) {
         console.error('Error fetching or processing sheet data:', error);
+    } finally {
+        hideLoadingOverlay(); // Hide loading overlay after all data has been fetched
     }
 }
-
 
 function getColor(value, minValue, maxValue) {
     // Ensure the value is a number.
