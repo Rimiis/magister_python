@@ -67,12 +67,16 @@
                 <button class="btn btn-primary mt-2" type="submit">Pievienot jaunu failu</button>
             </form>
         </div>
-        <select id="visualizationType">
-            <option value="choropleth">Choropleth</option>
-            <option value="heatmap">Heatmap</option>
-            <option value="dotmap">Dot Map</option>
-            <option value="bivariate">Bivariate</option>
-        </select>
+        <div class="selectors">
+            <label class="form-label">Izvēlēties vizualizācijas veidu </label>
+            <select class="form-select" id="visualizationType">
+                <option value="choropleth">Choropleth</option>
+                <option value="heatmap">Heatmap</option>
+                <option value="dotmap">Dot Map</option>
+                <option value="bivariate">Bivariate</option>
+            </select>
+        </div>
+      
         <div class="selectors mb-4">
             <label class="form-label">Izvēlies kura faila datus attēlot uz kartēm</label>
             <select id="xlsx-file-select" class="form-select">
