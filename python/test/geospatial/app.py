@@ -27,22 +27,6 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-def assign_color(value, max_value):
-    try:
-        value = float(value)  # Ensure value is a float
-        ratio = value / max_value  # Calculate the ratio of value to max_value
-    except (ValueError, TypeError, ZeroDivisionError):
-        return '#FFEDA0'  # Return default color for invalid or missing values or in case max_value is 0
-
-    if ratio > 0.875: return '#800026'
-    elif ratio > 0.75: return '#BD0026'
-    elif ratio > 0.625: return '#E31A1C'
-    elif ratio > 0.5: return '#FC4E2A'
-    elif ratio > 0.375: return '#FD8D3C'
-    elif ratio > 0.25: return '#FEB24C'
-    elif ratio > 0.125: return '#FED976'
-    else: return '#FFEDA0'
-
 
 logging.basicConfig(filename='app.log', level=logging.DEBUG,
                     format='%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s')
