@@ -73,7 +73,7 @@
             </form>
         </div>
         <div class="selectors">
-            <label class="form-label">Izvēlēties vizualizācijas veidu </label>
+            <label class="form-label">Izvēlieties vizualizācijas veidu </label>
             <select class="form-select" id="visualizationType">
                 <option value="choropleth">Choropleth</option>
                 <option value="heatmap">Heatmap</option>
@@ -83,26 +83,29 @@
         </div>
       
         <div class="selectors mb-4">
-            <label class="form-label">Izvēlies kura faila datus attēlot uz kartēm</label>
+            <label class="form-label">Izvēlieties kura faila datus attēlot uz kartēm</label>
             <select id="xlsx-file-select" class="form-select">
                 <option>Izvēlieties failu, kuru izmantot datiem</option>
             </select>
             <div id="loadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
                 <div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); color:white;">Lūdzu uzgaidiet, kamēr dati tiek apstrādāti...</div>
             </div>
+            <label class="form-label">Izvēlieties rādītājus, kurus attēlot. </label>
             <div id="loadingIndicator" class="spinner" style="display: none;"></div>
             <select id="sheet-select1" class="form-select"></select>
             <select id="sheet-select2" class="form-select"></select>
             <select id="sheet-select3" class="form-select"></select>
             <select id="sheet-select4" class="form-select"></select>
+            <label class="form-label">Izvēlieties gadu, par kuru attēlot datus </label>
             <select id="year-select" class="form-select"></select>
 
-            <button id="update-button" class="btn btn-secondary">Atjaunot kartes</button>
-            <button id="clear-layers-button" class="btn btn-danger">Nodzēst slāņus</button>
+            <button id="update-button" class="btn btn-primary">Atjaunot kartes</button>
+            <button id="clear-layers-button" class="btn btn-danger">Notīrīt kartes</button>
 
         </div>
 
         <div class="map-container">
+            
             <div id="mapid"></div>
             <div id="mapid2"></div>
             <div id="mapid3"></div>

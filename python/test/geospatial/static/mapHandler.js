@@ -952,21 +952,6 @@ function populateXlsxFileSelect() {
 
 var colorScale = d3.scaleLinear().domain([minValue1, maxValue1, minValue2, maxValue2]).range(["#fee8c8", "#e34a33", "#fdbb84", "#b30000"]);
 
-L.geoJson(geojsonData, {
-    style: function (feature) {
-        var value1 = feature.properties.variable1;
-        var value2 = feature.properties.variable2;
-        var color = colorScale(value1 + value2); // Simplified; you would need a more complex logic here
-        return {
-            fillColor: color,
-            weight: 2,
-            opacity: 1,
-            color: 'white',
-            dashArray: '3',
-            fillOpacity: 0.7
-        };
-    }
-}).addTo(mymap5);
 
 
 
