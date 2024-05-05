@@ -16,7 +16,7 @@ from werkzeug.utils import secure_filename
 # initialize flask app
 app = Flask(__name__)
 global df
-UPLOAD_FOLDER = 'C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/upload/'  # Specify the upload folder path
+UPLOAD_FOLDER = './upload'  # Specify the upload folder path
 ALLOWED_EXTENSIONS = {'xlsx'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB upload limit
@@ -32,7 +32,7 @@ logging.basicConfig(filename='app.log', level=logging.DEBUG,
                     format='%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s')
 
 
-uploads_dir = "C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/upload/"
+uploads_dir = "./upload/"
 # List all files in the uploads directory
 files_in_uploads = os.listdir(uploads_dir)
 
@@ -50,8 +50,8 @@ for xlsx_file in xlsx_files:
 
 
 # Load geospatial data
-gdf = gpd.read_file("C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/latvian_map_data/Territorial_units_LV_1.2m_(2024.01.01.).shp", encoding='utf-8')
-gdf_2 = gpd.read_file("C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/latvian_map_data/Administrativas_teritorijas_2021.shp", encoding='utf-8')
+gdf = gpd.read_file("latvian_map_data/Territorial_units_LV_1.2m_(2024.01.01.).shp", encoding='utf-8')
+gdf_2 = gpd.read_file("latvian_map_data/Administrativas_teritorijas_2021.shp", encoding='utf-8')
 gdf = gdf.to_crs(epsg=4326)
 gdf_2 = gdf_2.to_crs(epsg=4326)  # Convert to WGS84 if necessary
 reģions_index = df.columns.get_loc("Reģions")
