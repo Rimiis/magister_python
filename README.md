@@ -1,1 +1,1 @@
-# magister_python
+# geospatial visualisation app
