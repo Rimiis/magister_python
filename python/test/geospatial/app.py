@@ -16,7 +16,7 @@ from werkzeug.utils import secure_filename
 # initialize flask app
 app = Flask(__name__)
 global df
-UPLOAD_FOLDER = './upload'  # Specify the upload folder path
+UPLOAD_FOLDER = './upload/'  # Specify the upload folder path
 ALLOWED_EXTENSIONS = {'xlsx'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB upload limit
@@ -157,7 +157,7 @@ def preprocess_merge_columns(df, columns):
 
 
 # Path to the directory containing Excel files
-uploads_dir = "C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/upload/"
+uploads_dir = "./upload/"
 
 # List all Excel files in the directory
 excel_files = glob.glob(os.path.join(uploads_dir, '*.xlsx'))
@@ -171,7 +171,7 @@ for excel_file in excel_files:
 #
 @app.route('/list-xlsx-files')
 def list_xlsx_files():
-    uploads_dir = 'C:/Users/riman/OneDrive/Desktop/mag/magister_python/python/test/geospatial/upload/'  # Update this path
+    uploads_dir = './upload/' 
     files = [f for f in os.listdir(uploads_dir) if f.endswith('.xlsx')]
     return jsonify(files)
 
