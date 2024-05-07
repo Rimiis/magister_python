@@ -13,13 +13,13 @@ from shapely.geometry import Point
 from folium.plugins import HeatMap
 from werkzeug.utils import secure_filename
 
-# initialize flask app
+
 app = Flask(__name__)
 global df
-UPLOAD_FOLDER = './upload/'  # Specify the upload folder path
+UPLOAD_FOLDER = './upload/' 
 ALLOWED_EXTENSIONS = {'xlsx'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB upload limit
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  
 
 
 def allowed_file(filename):
@@ -33,27 +33,27 @@ logging.basicConfig(filename='app.log', level=logging.DEBUG,
 
 
 uploads_dir = "./upload/"
-# List all files in the uploads directory
+
 files_in_uploads = os.listdir(uploads_dir)
 
-# Filter for any '.xlsx' file
+
 xlsx_files = [file for file in files_in_uploads if file.endswith('.xlsx')]
 
-# Process each '.xlsx' file
+
 for xlsx_file in xlsx_files:
-    # Construct the full path to the '.xlsx' file
+  
     xlsx_path = os.path.join(uploads_dir, xlsx_file)
     
-    # Load the Excel file
+  
     df = pd.read_excel(xlsx_path)
     xls = pd.ExcelFile(xlsx_path)
 
 
-# Load geospatial data
+
 gdf = gpd.read_file("latvian_map_data/Territorial_units_LV_1.2m_(2024.01.01.).shp", encoding='utf-8')
 gdf_2 = gpd.read_file("latvian_map_data/Administrativas_teritorijas_2021.shp", encoding='utf-8')
 gdf = gdf.to_crs(epsg=4326)
-gdf_2 = gdf_2.to_crs(epsg=4326)  # Convert to WGS84 if necessary
+gdf_2 = gdf_2.to_crs(epsg=4326)  
 reģions_index = df.columns.get_loc("Reģions")
 new_columns_order = df.columns[reģions_index:].tolist()
 new_columns_order += df.columns[:reģions_index].tolist()
@@ -64,21 +64,20 @@ merged_data_dict = {}
 
 def calculate_quantiles(df, column):
     """Calculate quantiles for a given column in a DataFrame."""
-    # Ensure the column is numeric
+  
     if pd.api.types.is_numeric_dtype(df[column]):
         return df[column].quantile([0.2, 0.4, 0.6, 0.8]).values.tolist()
     else:
-        # Return None or an appropriate value if the column is not numeric
+       
         return None
 
 
 def merge_data(new_sheets_df):
     
     for sheet_name, df in new_sheets_df.items():
-        # Convert columns to string to ensure proper merging
+     
         df = df.astype(str)
         
-        # Determine the appropriate GeoDataFrame and merge columns based on the sheet's contents
         if 'Teritoriālais iedalījums' in df.columns:
             merge_columns = ('L1_name', 'Teritoriālais iedalījums')
             gdf_used = gdf
@@ -86,51 +85,48 @@ def merge_data(new_sheets_df):
             merge_columns = ('NOSAUKUMS', 'Pašvaldība')
             gdf_used = gdf_2
         
-        # Perform the initial merge
+     
         merged_df = gdf_used.merge(df, left_on=merge_columns[0], right_on=merge_columns[1], how='left')
         
-        # If we are using 'NOSAUKUMS' and 'Pašvaldība' as merge columns,
-        # check for unmatched rows and perform a secondary merge with gdf_2 using 'LABEL'
+       
         if merge_columns == ('NOSAUKUMS', 'Pašvaldība'):
-            # Identify rows in df that didn't match
+           
             unmatched_df = df[~df[merge_columns[1]].isin(merged_df[merge_columns[1]])]
             
             if not unmatched_df.empty:
                 matched_using_label = gdf_2.merge(unmatched_df, left_on='LABEL', right_on=merge_columns[1], how='inner')
-                # Concatenate the matched rows using LABEL with the main merged DataFrame
+              
                 merged_df = pd.concat([merged_df, matched_using_label], ignore_index=True)
         
-        # Ensure the result is a GeoDataFrame
         merged_data_dict[sheet_name] = gpd.GeoDataFrame(merged_df, geometry='geometry')
 
-        # Calculate quantiles for numeric columns and store the results
+       
         quantiles_dict = {}
         for column in merged_df.select_dtypes(include='number').columns:
             quantiles_dict[column] = calculate_quantiles(merged_df, column)
         
-        # Store the quantiles in the merged_data_dict as well
+       
         merged_data_dict[sheet_name]['quantiles'] = quantiles_dict
 
 
 def update_application_state(new_file_path):
-    global sheets_df, merged_data_dict  # Access global variables
+    global sheets_df, merged_data_dict 
     try:
-        # Clear the existing data to make way for the new upload
         new_sheets_df = {}
         new_merged_data_dict = {}
         
-        # Load the new Excel file
+     
         xls = pd.ExcelFile(new_file_path)
         
-        # Iterate over each sheet in the Excel file
+       
         for sheet_name in xls.sheet_names:
-            # Read the sheet into a DataFrame, ensuring all data is read as strings
+         
             df = pd.read_excel(xls, sheet_name=sheet_name, header=0, dtype=str)
             
-            # Store the DataFrame in the dictionary
+         
             new_sheets_df[sheet_name] = df
             
-        # Now we need to merge this data with the geospatial data
+     
         merge_data(new_sheets_df)
         
         sheets_df.update(new_sheets_df)
@@ -197,7 +193,7 @@ def upload_file():
 
 @app.route('/sheets/<filename>')
 def get_sheets(filename):
-    # Make sure to validate the filename to prevent path traversal attacks
+    
     safe_filename = secure_filename(filename)
     file_path = os.path.join(UPLOAD_FOLDER, safe_filename)
     try:
@@ -221,7 +217,7 @@ def get_sheet_data(sheet_name):
             
             if year and year in merged_geo_df.columns:
                 # Filter the GeoDataFrame for the selected year
-                # Here you could alsocalculate the min and max values for color scaling
+                
                 merged_geo_df[year] = merged_geo_df[year].apply(lambda x: round(float(x), 1) if pd.notnull(x) else x)
                 filtered_df = merged_geo_df[[year, 'geometry']]
                 min_value = filtered_df[year].min()
