@@ -94,76 +94,87 @@ function addLegend(map, colors, values) {
     legend.addTo(map);
     map.legend = legend; 
 }
-function createBivariateLegend() {
-    const selectedFile = document.getElementById('xlsx-file-select').value; 
+
+function formatQuantileValue(number) {
+    if (number < 0) {
+      return "-" + formatQuantileValue(-1 * number);
+    }
+    if (number < 1000) {
+      return number.toFixed(0);
+    } else if (number >= 1000 && number < 1_000_000) {
+      return (number / 1000).toFixed(1).replace(/\.0$/, "") + "K";
+    } else if (number >= 1_000_000) {
+      return (number / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
+    }
+  }
+function createBivariateLegend(quantilesX,quantilesY) {
+    const selectedFile = document.getElementById('xlsx-file-select').value;
     const sheetNameX = document.getElementById('sheet-select1').value; // Sheet for x-axis
     const sheetNameY = document.getElementById('sheet-select2').value; // Sheet for y-axis
-
-    const svgWidth = 350; 
-    const svgHeight = 150; 
+  
+    const svgWidth = 350;
+    const svgHeight = 150;
     const cellSize = 30; // Size of each color cell
-    const margin = { top: 20, right: 10, bottom: 60, left: 80 }; 
-
-   
+    const margin = { top: 20, right: 10, bottom: 60, left: 80 };
+  
     const svg = d3.select('#legend-container').html("").append('svg')
-        .attr('width', svgWidth)
-        .attr('height', svgHeight)
-        .style('font', '10px sans-serif');
-
-    
+      .attr('width', svgWidth)
+      .attr('height', svgHeight)
+      .style('font', '10px sans-serif');
+  
     const rdBuScheme = schemes.find(scheme => scheme.name === "RdBu") || schemes[0];
     const colors = rdBuScheme.colors;
     const colorMatrix = [
-        colors.slice(6, 9),
-        colors.slice(3, 6),
-        colors.slice(0, 3)
+      colors.slice(6, 9),
+      colors.slice(3, 6),
+      colors.slice(0, 3)
     ];
+  
 
+  
     colorMatrix.forEach((rowColors, i) => {
-        rowColors.forEach((color, j) => {
-            svg.append('rect')
-                .attr('x', margin.left + j * cellSize)
-                .attr('y', margin.top + i * cellSize)
-                .attr('width', cellSize)
-                .attr('height', cellSize)
-                .style('fill', color);
-        });
+      rowColors.forEach((color, j) => {
+        svg.append('rect')
+          .attr('x', margin.left + j * cellSize)
+          .attr('y', margin.top + i * cellSize)
+          .attr('width', cellSize)
+          .attr('height', cellSize)
+          .style('fill', color);
+  
+        // X-axis labels (only at the bottom row)
+        if (i === colorMatrix.length - 1) {
+          svg.append('text')
+            .attr('x', margin.left + j * cellSize + cellSize / 2)
+            .attr('y', margin.top + (i + 1) * cellSize + 10)
+            .style('text-anchor', 'middle')
+            .text(formatQuantileValue(quantilesX[j]));  // Use toFixed(0) to remove decimals
+        }
+      });
     });
-
-    
-
- 
-    svg.append('text')
-        .attr('x', margin.left + cellSize * 1.5) 
-        .attr('y', margin.top + (3 * cellSize) + 20) 
+  
+    // Y-axis labels, correct order from top to bottom
+    for (let i = 0; i < quantilesY.length; i++) {
+      svg.append('text')
+        .attr('transform', `translate(${margin.left - 10}, ${margin.top + i * cellSize + cellSize / 2})rotate(-90)`)
         .style('text-anchor', 'middle')
-        .style('font-weight', 'bold')
-        .text(sheetNameX); 
-
-   
+        .text(formatQuantileValue(quantilesY[quantilesY.length - 1 - i])); // Use toFixed(0) to remove decimals
+    }
+  
+    // Axis label annotations
     svg.append('text')
-        .attr('transform', `translate(${margin.left / 3}, ${margin.top + cellSize * 1.5})rotate(-90)`)
-        .style('text-anchor', 'middle')
-        .style('font-weight', 'bold')
-        .text(sheetNameY); 
-   
-    svg.append('line')
-        .attr('x1', margin.left)
-        .attr('y1', margin.top + cellSize * 3)
-        .attr('x2', margin.left + cellSize * 3)
-        .attr('y2', margin.top + cellSize * 3)
-        .style('stroke', 'black')
-        .style('stroke-width', 1);
-
-    // Y-axis line
-    svg.append('line')
-        .attr('x1', margin.left)
-        .attr('y1', margin.top)
-        .attr('x2', margin.left)
-        .attr('y2', margin.top + cellSize * 3)
-        .style('stroke', 'black')
-        .style('stroke-width', 1);
+      .attr('x', margin.left + cellSize * 1.5)
+      .attr('y', margin.top + (3 * cellSize) + 20)
+      .style('text-anchor', 'middle')
+      .style('font-weight', 'bold')
+      .text(sheetNameX); // Name of the indicator for X-axis
+  
+    svg.append('text')
+      .attr('transform', `translate(${margin.left / 3}, ${margin.top + cellSize * 1.5})rotate(-90)`)
+      .style('text-anchor', 'middle')
+      .style('font-weight', 'bold')
+      .text(sheetNameY); // Name of the indicator for Y-axis
 }
+
 
 function generateLegendColors(minValue, maxValue) {
     const sampleValues = [];
@@ -399,7 +410,7 @@ function updateBivariateChoroplethMap() {
             }
         });
 
-    createBivariateLegend();
+    createBivariateLegend(quantiles1,quantiles2);
 }
 
 function getBivariateColor(value1, value2, minValue1, maxValue1, minValue2, maxValue2) {
